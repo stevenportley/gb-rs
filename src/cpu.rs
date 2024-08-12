@@ -1,0 +1,1432 @@
+fn does_bit3_overflow(a: u8, b: u8) -> bool {
+    let a = a & 0xF;
+    let b = b & 0xF;
+
+    return (0xF - a) < b;
+}
+
+fn does_bit11_overflow(a: u16, b: u16) -> bool {
+    let a = a & 0xFFF;
+    let b = b & 0xFFF;
+
+    return (0xFFF - a) < b;
+}
+
+fn does_bit3_borrow(a: u8, b: u8) -> bool {
+    let a = a & 0xF;
+    let b = b & 0xF;
+    return b > a;
+}
+
+pub struct Cpu {
+    a: u8,
+    b: u8,
+    c: u8,
+    d: u8,
+    e: u8,
+    h: u8,
+    l: u8,
+    sp: u16,
+    pc: u16,
+
+    z_f: bool,
+    n_f: bool,
+    h_f: bool,
+    c_f: bool,
+
+    pub memory: [u8; 0x10000],
+}
+
+#[derive(Debug)]
+enum Operands {
+    A,  // The accumulator
+    SP, // The stadck pointer
+    HL, // HL register
+    R8(u8),
+    R16(u8),
+    R16Stk(u8),
+    R16Mem(u8),
+    Cond(u8), // TODO(SP): Figure out what this is. https://gbdev.io/pandocs/CPU_Instruction_Set.html#cb-prefix-instructions
+    B3(u8),   // TODO(SP): Figure out what this is.
+    Tgt3(u8), //TODO(SP): Figure out what this is.
+    Imm8(u8),
+    Imm16(u16), //TODO(SP): This needs to be little-endian, make sure to test this
+    SpImm8(u8), // This is SP + Imm8
+}
+
+// Bit indices to address particular register
+const A_REG: u8 = 7;
+const C_REG: u8 = 1;
+const HL_REG: u8 = 2;
+
+#[derive(Debug, PartialEq)]
+enum Opcode {
+    NOP,
+    LD,
+    INC,
+    DEC,
+    ADD,
+    RLCA,
+    RRCA,
+    RLA,
+    RRA,
+    DAA,
+    CPL,
+    SCF,
+    CCF,
+
+    JR,
+    STOP,
+    HALT,
+    ADC,
+    SUB,
+    SBC,
+    AND,
+    XOR,
+    OR,
+    CP,
+    RET,
+    RETI,
+    JP,
+    CALL,
+    RST,
+    POP,
+    PUSH,
+    LDH,
+    DI,
+    EI,
+    //0xCB instructions
+    RLC,
+    RRC,
+    RL,
+    RR,
+    SLA,
+    SRA,
+    SWAP,
+    SRL,
+    BIT,
+    RES,
+    SET,
+}
+
+#[derive(Debug)]
+pub struct Instr {
+    opcode: Opcode,
+    op1: Option<Operands>,
+    op2: Option<Operands>,
+}
+
+impl Cpu {
+    pub fn new() -> Cpu {
+        Cpu {
+            a: 0x01,
+            b: 0x00,
+            c: 0x13,
+            d: 0x00,
+            e: 0xD8,
+            h: 0x01,
+            l: 0x4D,
+            sp: 0xFFFE,
+            pc: 0x0100,
+            h_f: true,
+            c_f: true,
+            n_f: false,
+            z_f: true,
+            memory: [0; 0x10000],
+        }
+    }
+
+    fn get_f(&self) -> u8 {
+        let z = if self.z_f { 0x80 } else { 0 };
+        let n = if self.n_f { 0x40 } else { 0 };
+        let h = if self.h_f { 0x20 } else { 0 };
+        let c = if self.c_f { 0x10 } else { 0 };
+        return z | n | h | c;
+    }
+
+    fn rreg8(&mut self, dst: u8) -> u8 {
+        match dst {
+            0 => return self.b,
+            1 => return self.c,
+            2 => return self.d,
+            3 => return self.e,
+            4 => return self.h,
+            5 => return self.l,
+            6 => {
+                // This is a special case, instead of setting a register,
+                // we use the memory location pointed to by the HL register
+                let hl = ((self.h as u16) << 8) | (self.l as u16);
+                return self.memory[hl as usize];
+            }
+            7 => return self.a,
+            _ => unreachable!("rreg8 with invalid bit index! {dst}"),
+        }
+    }
+
+    fn wreg8(&mut self, dst: u8, val: u8) {
+        match dst {
+            0 => self.b = val,
+            1 => self.c = val,
+            2 => self.d = val,
+            3 => self.e = val,
+            4 => self.h = val,
+            5 => self.l = val,
+            6 => {
+                // This is a special case, instead of setting a register,
+                // we use the memory location pointed to by the HL register
+                let hl = ((self.h as u16) << 8) | (self.l as u16);
+                self.memory[hl as usize] = val;
+            }
+            7 => self.a = val,
+            _ => unreachable!("Set reg8 with invalid bit index! {dst}"),
+        }
+    }
+
+    fn wreg16(&mut self, dst: u8, val: u16) {
+        let high: u8 = (val >> 8) as u8;
+        let low: u8 = val as u8;
+
+        match dst {
+            0 => {
+                self.b = high;
+                self.c = low;
+            }
+            1 => {
+                self.d = high;
+                self.e = low;
+            }
+            2 => {
+                self.h = high;
+                self.l = low;
+            }
+            3 => {
+                self.sp = val;
+            }
+            _ => {
+                unreachable!("Set reg16 with invalid bit index! {dst}")
+            }
+        }
+    }
+
+    fn rreg16(&mut self, dst: u8) -> u16 {
+        let make_u16 = |h, l| -> u16 { (h as u16) << 8 | (l as u16) };
+
+        match dst {
+            0 => return make_u16(self.b, self.c),
+            1 => return make_u16(self.d, self.e),
+            2 => return make_u16(self.h, self.l),
+            3 => return self.sp,
+            _ => unreachable!("rreg16 with invalid bit index! {dst}"),
+        }
+    }
+
+    fn rr16mem(&mut self, r16mem: u8) -> u8 {
+        let make_u16 = |h, l| -> u16 { (h as u16) << 8 | (l as u16) };
+        match r16mem {
+            0 => return self.memory[make_u16(self.b, self.c) as usize],
+            1 => return self.memory[make_u16(self.d, self.e) as usize],
+            2 => {
+                let mut hl = make_u16(self.h, self.l);
+                let ret = self.memory[hl as usize];
+                hl = hl + 1;
+                self.h = (hl >> 8) as u8;
+                self.l = (hl & 0xFF) as u8;
+                return ret;
+            }
+            4 => {
+                let mut hl = make_u16(self.h, self.l);
+                let ret = self.memory[hl as usize];
+                hl = hl.wrapping_sub(1);
+                self.h = (hl >> 8) as u8;
+                self.l = (hl & 0xF) as u8;
+                return ret;
+            }
+            _ => unreachable!("rr16mem with invalid bit index! {r16mem}"),
+        }
+    }
+
+    fn wr16mem(&mut self, r16mem: u8, val: u8) {
+        let make_u16 = |h, l| -> u16 { (h as u16) << 8 | (l as u16) };
+        match r16mem {
+            0 => self.memory[make_u16(self.b, self.c) as usize] = val,
+            1 => self.memory[make_u16(self.d, self.e) as usize] = val,
+            2 => {
+                let mut hl = make_u16(self.h, self.l);
+                self.memory[hl as usize] = val;
+                hl = hl + 1;
+                self.h = (hl >> 8) as u8;
+                self.l = (hl & 0xF) as u8;
+            }
+            4 => {
+                let mut hl = make_u16(self.h, self.l);
+                self.memory[hl as usize] = val;
+                hl = hl.wrapping_sub(1);
+                self.h = (hl >> 8) as u8;
+                self.l = (hl & 0xF) as u8;
+            }
+            _ => unreachable!("rr16mem with invalid bit index! {r16mem}"),
+        }
+    }
+
+    fn check_cond(&self, cond: u8) -> bool {
+        match cond {
+            0 => return !self.z_f,
+            1 => return self.z_f,
+            2 => return !self.c_f,
+            3 => return self.c_f,
+            _ => unreachable!("Invalid condition check! {cond}"),
+        }
+    }
+
+    fn load_byte(&mut self) -> u8 {
+        let next_byte = self.memory[self.pc as usize];
+        self.pc += 1;
+        return next_byte;
+    }
+
+    fn load_word(&mut self) -> u16 {
+        let next = self.load_byte();
+        let next_next = self.load_byte();
+
+        return (next as u16) | ((next_next as u16) << 8);
+    }
+
+    fn block0_decode(&mut self, opcode: u8) -> Instr {
+        let lower_four = opcode & 0xF;
+        let lower_three = opcode & 0x7;
+        let is_jr_cond = (opcode & 0xE7) == 0x20; //Is this opcode for `jr cond, imm8`
+
+        let instr = {
+            // NOP
+            if opcode == 0 {
+                Instr {
+                    opcode: Opcode::NOP,
+                    op1: None,
+                    op2: None,
+                }
+
+            // LD
+            } else if lower_four == 1 {
+                let op1 = (opcode >> 4) & 0x3;
+                let op2 = self.load_word();
+                Instr {
+                    opcode: Opcode::LD,
+                    op1: Some(Operands::R16(op1)),
+                    op2: Some(Operands::Imm16(op2)),
+                }
+            } else if lower_four == 2 {
+                let op1 = (opcode >> 4) & 0x3;
+                Instr {
+                    opcode: Opcode::LD,
+                    op1: Some(Operands::R16Mem(op1)),
+                    op2: Some(Operands::A),
+                }
+            } else if lower_four == 10 {
+                let op2 = (opcode >> 4) & 0x3;
+                Instr {
+                    opcode: Opcode::LD,
+                    op1: Some(Operands::A),
+                    op2: Some(Operands::R16Mem(op2)),
+                }
+            } else if lower_four == 3 {
+                let op1 = (opcode >> 4) & 0x3;
+                Instr {
+                    opcode: Opcode::INC,
+                    op1: Some(Operands::R16(op1)),
+                    op2: None,
+                }
+            } else if lower_four == 0xB {
+                let op1 = (opcode >> 4) & 0x3;
+                Instr {
+                    opcode: Opcode::DEC,
+                    op1: Some(Operands::R16(op1)),
+                    op2: None,
+                }
+            } else if lower_four == 0x9 {
+                let op2 = (opcode >> 4) & 0x3;
+                Instr {
+                    opcode: Opcode::ADD,
+                    op1: Some(Operands::HL),
+                    op2: Some(Operands::R16(op2)),
+                }
+            } else if lower_four == 0x8 {
+                let op1 = self.load_word();
+                Instr {
+                    opcode: Opcode::LD,
+                    op1: Some(Operands::Imm16(op1)),
+                    op2: Some(Operands::SP),
+                }
+            } else if lower_three == 0x4 {
+                let op1 = (opcode >> 3) & 0x7;
+                Instr {
+                    opcode: Opcode::INC,
+                    op1: Some(Operands::R8(op1)),
+                    op2: None,
+                }
+            } else if lower_three == 5 {
+                let op1 = (opcode >> 3) & 0x7;
+                Instr {
+                    opcode: Opcode::DEC,
+                    op1: Some(Operands::R8(op1)),
+                    op2: None,
+                }
+            } else if lower_three == 6 {
+                let op1 = (opcode >> 3) & 0x7;
+                let op2 = self.load_byte();
+                Instr {
+                    opcode: Opcode::LD,
+                    op1: Some(Operands::R8(op1)),
+                    op2: Some(Operands::Imm8(op2)),
+                }
+            } else if opcode == 0x7 {
+                Instr {
+                    opcode: Opcode::RLCA,
+                    op1: None,
+                    op2: None,
+                }
+            } else if opcode == 0xF {
+                Instr {
+                    opcode: Opcode::RRCA,
+                    op1: None,
+                    op2: None,
+                }
+            } else if opcode == 0x17 {
+                Instr {
+                    opcode: Opcode::RLA,
+                    op1: None,
+                    op2: None,
+                }
+            } else if opcode == 0x1F {
+                Instr {
+                    opcode: Opcode::RRA,
+                    op1: None,
+                    op2: None,
+                }
+            } else if opcode == 0x27 {
+                Instr {
+                    opcode: Opcode::DAA,
+                    op1: None,
+                    op2: None,
+                }
+            } else if opcode == 0x2F {
+                Instr {
+                    opcode: Opcode::CPL,
+                    op1: None,
+                    op2: None,
+                }
+            } else if opcode == 0x37 {
+                Instr {
+                    opcode: Opcode::SCF,
+                    op1: None,
+                    op2: None,
+                }
+            } else if opcode == 0x3F {
+                Instr {
+                    opcode: Opcode::CCF,
+                    op1: None,
+                    op2: None,
+                }
+            } else if opcode == 0x18 {
+                let next_byte = self.load_byte();
+                Instr {
+                    opcode: Opcode::JR,
+                    op1: Some(Operands::Imm8(next_byte)),
+                    op2: None,
+                }
+            } else if is_jr_cond {
+                let next_byte = self.load_byte();
+                let cond = (opcode >> 3) & 0x3;
+                Instr {
+                    opcode: Opcode::JR,
+                    op1: Some(Operands::Cond(cond)),
+                    op2: Some(Operands::Imm8(next_byte)),
+                }
+            } else if opcode == 0x10 {
+                Instr {
+                    opcode: Opcode::STOP,
+                    op1: None,
+                    op2: None,
+                }
+            } else {
+                unreachable!(
+                    "Block0 opcode decoding failed. Illegal opcode: {:#04x}",
+                    opcode
+                );
+            }
+        };
+
+        return instr;
+    }
+    fn block1_decode(&mut self, opcode: u8) -> Instr {
+        if opcode == 0x76 {
+            return Instr {
+                opcode: Opcode::HALT,
+                op1: None,
+                op2: None,
+            };
+        }
+
+        if (opcode & 0xC0) != 0x40 {
+            unreachable!(
+                "Block1 opcode decoding failed. Illegal opcode: {:#04x}",
+                opcode
+            );
+        }
+
+        let src = opcode & 0x7;
+        let dst = (opcode >> 3) & 0x7;
+
+        return Instr {
+            opcode: Opcode::LD,
+            op1: Some(Operands::R8(dst)),
+            op2: Some(Operands::R8(src)),
+        };
+    }
+
+    fn block2_decode(&mut self, opcode: u8) -> Instr {
+        let code = opcode & 0xF8; // Clear lower 3 bits
+        let operand = opcode & 0x7;
+
+        let this_opcode = match code {
+            0x80 => Opcode::ADD,
+            0x88 => Opcode::ADC,
+            0x90 => Opcode::SUB,
+            0x98 => Opcode::SBC,
+            0xA0 => Opcode::AND,
+            0xA8 => Opcode::XOR,
+            0xB0 => Opcode::OR,
+            0xB8 => Opcode::CP,
+            _ => unreachable!(
+                "Block2 opcode decoding failed. Illegal opcode: {:#04x}",
+                opcode
+            ),
+        };
+
+        return Instr {
+            opcode: this_opcode,
+            op1: Some(Operands::A),
+            op2: Some(Operands::R8(operand)),
+        };
+    }
+    fn block3_decode(&mut self, opcode: u8) -> Instr {
+        let lower_three = opcode & 0x7;
+        if lower_three == 0x6 {
+            //One of the immediates in block3
+            let next_byte = self.load_byte();
+            let this_code = match opcode {
+                0xC6 => Opcode::ADD,
+                0xCE => Opcode::ADC,
+                0xD6 => Opcode::SUB,
+                0xDE => Opcode::SBC,
+                0xE6 => Opcode::AND,
+                0xEE => Opcode::XOR,
+                0xF6 => Opcode::OR,
+                0xFE => Opcode::CP,
+                _ => unreachable!(
+                    "Block3 opcode decoding failed. Illegal opcode: {:#04x}",
+                    opcode
+                ),
+            };
+
+            return Instr {
+                opcode: this_code,
+                op1: Some(Operands::A),
+                op2: Some(Operands::Imm8(next_byte)),
+            };
+        }
+
+        // One of the instructions in block 3
+        // below 0xCB prefix
+        match opcode {
+            0xE2 => {
+                return Instr {
+                    opcode: Opcode::LDH,
+                    op1: Some(Operands::R8(C_REG)),
+                    op2: Some(Operands::A),
+                }
+            }
+            0xE0 => {
+                let next_byte = self.load_byte();
+                return Instr {
+                    opcode: Opcode::LDH,
+                    op1: Some(Operands::Imm8(next_byte)),
+                    op2: Some(Operands::A),
+                };
+            }
+            0xEA => {
+                let next_word = self.load_word();
+                return Instr {
+                    opcode: Opcode::LD,
+                    op1: Some(Operands::Imm16(next_word)),
+                    op2: Some(Operands::A),
+                };
+            }
+
+            0xF2 => {
+                return Instr {
+                    opcode: Opcode::LDH,
+                    op1: Some(Operands::A),
+                    op2: Some(Operands::R8(C_REG)),
+                };
+            }
+
+            0xF0 => {
+                let next_byte = self.load_byte();
+                return Instr {
+                    opcode: Opcode::LDH,
+                    op1: Some(Operands::A),
+                    op2: Some(Operands::Imm8(next_byte)),
+                };
+            }
+
+            0xFA => {
+                let next_word = self.load_word();
+                return Instr {
+                    opcode: Opcode::LD,
+                    op1: Some(Operands::A),
+                    op2: Some(Operands::Imm16(next_word)),
+                };
+            }
+
+            0xE8 => {
+                let next_byte = self.load_byte();
+                return Instr {
+                    opcode: Opcode::ADD,
+                    op1: Some(Operands::SP),
+                    op2: Some(Operands::Imm8(next_byte)),
+                };
+            }
+
+            0xF8 => {
+                let next_byte = self.load_byte();
+                return Instr {
+                    opcode: Opcode::LD,
+                    op1: Some(Operands::HL),
+                    op2: Some(Operands::SpImm8(next_byte)),
+                };
+            }
+
+            0xF9 => {
+                return Instr {
+                    opcode: Opcode::LD,
+                    op1: Some(Operands::SP),
+                    op2: Some(Operands::HL),
+                };
+            }
+
+            0xF3 => {
+                //TODO(SP): Interrupts
+                return Instr {
+                    opcode: Opcode::NOP,
+                    op1: None,
+                    op2: None,
+                };
+
+                /*
+                return Instr {
+                    opcode: Opcode::DI,
+                    op1: None,
+                    op2: None,
+                };
+                */
+            }
+
+            0xFB => {
+                return Instr {
+                    opcode: Opcode::NOP,
+                    op1: None,
+                    op2: None,
+                };
+                /*
+                return Instr {
+                    opcode: Opcode::EI,
+                    op1: None,
+                    op2: None,
+                };
+                */
+            }
+
+            _ => {}
+        }
+
+        if opcode == 0xCB {
+            todo!("0xCB instructions are not implemented yet!");
+        }
+
+        let lower_four = opcode & 0xF;
+        if lower_four == 1 {
+            let r16stk = (opcode >> 4) & 0x3;
+            return Instr {
+                opcode: Opcode::POP,
+                op1: Some(Operands::R16Stk(r16stk)),
+                op2: None,
+            };
+        }
+
+        if lower_four == 5 {
+            let r16stk = (opcode >> 4) & 0x3;
+            return Instr {
+                opcode: Opcode::PUSH,
+                op1: Some(Operands::R16Stk(r16stk)),
+                op2: None,
+            };
+        }
+
+        let bit43 = (opcode >> 3) & 0x3;
+
+        if lower_three == 0 {
+            return Instr {
+                opcode: Opcode::RET,
+                op1: Some(Operands::Cond(bit43)),
+                op2: None,
+            };
+        }
+
+        if lower_three == 0x1 {
+            if bit43 == 0x1 {
+                return Instr {
+                    opcode: Opcode::RET,
+                    op1: None,
+                    op2: None,
+                };
+            } else if bit43 == 0x3 {
+                return Instr {
+                    opcode: Opcode::RETI,
+                    op1: None,
+                    op2: None,
+                };
+            } else {
+                unreachable!(
+                    "Block3 opcode decoding failed. Illegal opcode: {:#04x}",
+                    opcode
+                );
+            }
+        }
+
+        if lower_three == 0x2 {
+            return Instr {
+                opcode: Opcode::JP,
+                op1: Some(Operands::Cond(bit43)),
+                op2: None,
+            };
+        }
+
+        if opcode == 0xC3 {
+            let next_word = self.load_word();
+            return Instr {
+                opcode: Opcode::JP,
+                op1: Some(Operands::Imm16(next_word)),
+                op2: None,
+            };
+        }
+
+        if opcode == 0xE9 {
+            return Instr {
+                opcode: Opcode::JP,
+                op1: Some(Operands::HL),
+                op2: None,
+            };
+        }
+
+        if opcode == 0xCD {
+            let next_word = self.load_word();
+            return Instr {
+                opcode: Opcode::CALL,
+                op1: Some(Operands::Imm16(next_word)),
+                op2: None,
+            };
+        }
+
+        if lower_three == 0x7 {
+            let bit543 = (opcode >> 3) & 0x7;
+            return Instr {
+                opcode: Opcode::RST,
+                op1: Some(Operands::Tgt3(bit543)),
+                op2: None,
+            };
+        }
+
+        unreachable!(
+            "Block3 opcode decoding failed. Illegal opcode: {:#04x}",
+            opcode
+        );
+    }
+
+    pub fn next_instr(&mut self) -> Instr {
+        let opcode = self.memory[self.pc as usize];
+        self.pc += 1;
+
+        let instr = match opcode {
+            0x00..=0x3F => self.block0_decode(opcode),
+            0x40..=0x7F => self.block1_decode(opcode),
+            0x80..=0xBF => self.block2_decode(opcode),
+            0xC0..=0xFF => self.block3_decode(opcode),
+        };
+
+        instr
+    }
+
+    pub fn log_state(&self) {
+        // This is formatted for use with gb doctor
+        // https://robertheaton.com/gameboy-doctor/
+        println!("A:{:02X} F:{:02X} B:{:02X} C:{:02X} D:{:02X} E:{:02X} H:{:02X} L:{:02X} SP:{:04X} PC:{:04X} PCMEM:{:02X},{:02X},{:02X},{:02X}",
+            self.a,
+            self.get_f(),
+            self.b,
+            self.c,
+            self.d,
+            self.e,
+            self.h,
+            self.l,
+            self.sp,
+            self.pc,
+            self.memory[self.pc as usize],
+            self.memory[self.pc as usize + 1],
+            self.memory[self.pc as usize + 2],
+            self.memory[self.pc as usize + 3]);
+    }
+
+    pub fn execute_instr(&mut self, instr: Instr) -> usize {
+        match instr {
+            Instr {
+                opcode: Opcode::NOP,
+                op1: None,
+                op2: None,
+            } => 1,
+            Instr {
+                opcode: Opcode::LD,
+                op1: Some(Operands::R16(r1)),
+                op2: Some(Operands::Imm16(i)),
+            } => {
+                self.wreg16(r1, i);
+                2
+            }
+            Instr {
+                opcode: Opcode::LD,
+                op1: Some(Operands::R16Mem(mem)),
+                op2: Some(Operands::A),
+            } => {
+                self.wr16mem(mem, self.a);
+                2
+            }
+            Instr {
+                opcode: Opcode::LD,
+                op1: Some(Operands::A),
+                op2: Some(Operands::R16Mem(mem)),
+            } => {
+                self.a = self.rr16mem(mem);
+                return 2;
+            }
+            Instr {
+                opcode: Opcode::LD,
+                op1: Some(Operands::Imm16(i)),
+                op2: Some(Operands::SP),
+            } => {
+                // This is why: https://rgbds.gbdev.io/docs/v0.8.0/gbz80.7#LD__n16_,SP
+                self.memory[i as usize] = self.sp as u8;
+                self.memory[(i + 1) as usize] = (self.sp >> 8) as u8;
+                return 5;
+            }
+            Instr {
+                opcode: Opcode::INC,
+                op1: Some(Operands::R16(reg)),
+                op2: None,
+            } => {
+                let plus_one = self.rreg16(reg).wrapping_add(1);
+                self.wreg16(reg, plus_one);
+
+                return 2;
+            }
+            Instr {
+                opcode: Opcode::DEC,
+                op1: Some(Operands::R16(reg)),
+                op2: None,
+            } => {
+                let minus_one = self.rreg16(reg).wrapping_sub(1);
+                self.wreg16(reg, minus_one);
+                return 2;
+            }
+            Instr {
+                opcode: Opcode::ADD,
+                op1: Some(Operands::HL),
+                op2: Some(Operands::R16(reg)),
+            } => {
+                let before = self.rreg16(HL_REG);
+                let rreg = self.rreg16(reg);
+                let added = before.wrapping_add(rreg);
+                self.wreg16(HL_REG, added);
+                self.n_f = false;
+
+                if before < 0x8000 && ((before as u32 + rreg as u32) >= 0x8000) {
+                    // Overflow from bit 11 :(
+                    self.h_f = true;
+                } else {
+                    self.h_f = false;
+                }
+
+                if before > added {
+                    self.c_f = true;
+                } else {
+                    self.c_f = false;
+                }
+                return 2;
+            }
+            Instr {
+                opcode: Opcode::INC,
+                op1: Some(Operands::R8(reg)),
+                op2: None,
+            } => {
+                let before = self.rreg8(reg);
+                self.h_f = does_bit3_overflow(before, 1);
+                self.n_f = false;
+                let incre = before.wrapping_add(1);
+                self.z_f = incre == 0;
+                self.wreg8(reg, incre);
+
+                return 1;
+            }
+            Instr {
+                opcode: Opcode::DEC,
+                op1: Some(Operands::R8(reg)),
+                op2: None,
+            } => {
+                let before = self.rreg8(reg);
+                let dec = before.wrapping_sub(1);
+                self.wreg8(reg, dec);
+
+                self.z_f = dec == 0;
+                self.h_f = does_bit3_borrow(before, 1);
+                self.n_f = true;
+
+                return 1;
+            }
+            Instr {
+                opcode: Opcode::LD,
+                op1: Some(Operands::R8(reg)),
+                op2: Some(Operands::Imm8(i)),
+            } => {
+                self.wreg8(reg, i);
+                return 2;
+            }
+            Instr {
+                opcode: Opcode::RLCA,
+                op1: None,
+                op2: None,
+            } => {
+                let msb = self.a >> 7;
+
+                self.a = (self.a << 1) | msb;
+                self.z_f = false;
+                self.n_f = false;
+                self.h_f = false;
+                self.c_f = msb == 1;
+                return 1;
+            }
+            Instr {
+                opcode: Opcode::RRCA,
+                op1: None,
+                op2: None,
+            } => {
+                let lsb = self.a & 1;
+
+                self.a = (self.a >> 1) | (lsb << 7);
+                self.z_f = false;
+                self.n_f = false;
+                self.h_f = false;
+                self.c_f = lsb == 1;
+                return 1;
+            }
+            Instr {
+                opcode: Opcode::RLA,
+                op1: None,
+                op2: None,
+            } => {
+                let msb = self.a >> 7;
+                let new_lsb = if self.c_f { 1 } else { 0 };
+
+                self.a = (self.a << 1) | new_lsb;
+                self.z_f = false;
+                self.n_f = false;
+                self.h_f = false;
+                self.c_f = msb == 1;
+                return 1;
+            }
+            Instr {
+                opcode: Opcode::RRA,
+                op1: None,
+                op2: None,
+            } => {
+                let lsb = self.a & 1;
+                let new_msb = if self.c_f { 0x80 } else { 0 };
+
+                self.a = (self.a >> 1) | (new_msb);
+                self.z_f = false;
+                self.n_f = false;
+                self.h_f = false;
+                self.c_f = lsb == 1;
+                return 1;
+            }
+            Instr {
+                opcode: Opcode::DAA,
+                op1: None,
+                op2: None,
+            } => {
+                //https://forums.nesdev.org/viewtopic.php?t=15944
+                unreachable!("DAA isn't implemented :(");
+            }
+            Instr {
+                opcode: Opcode::CPL,
+                op1: None,
+                op2: None,
+            } => {
+                self.a = !self.a;
+                self.n_f = true;
+                self.h_f = true;
+                return 1;
+            }
+            Instr {
+                opcode: Opcode::SCF,
+                op1: None,
+                op2: None,
+            } => {
+                self.n_f = false;
+                self.h_f = false;
+                self.c_f = true;
+                return 1;
+            }
+            Instr {
+                opcode: Opcode::CCF,
+                op1: None,
+                op2: None,
+            } => {
+                self.n_f = false;
+                self.h_f = false;
+                self.c_f = !self.c_f;
+                return 1;
+            }
+            Instr {
+                opcode: Opcode::JR,
+                op1: Some(Operands::Imm8(i)),
+                op2: None,
+            } => {
+                let offset = i as i8;
+                let curr_pc = self.pc as i32;
+                let new_pc = curr_pc + offset as i32;
+                self.pc = new_pc as u16;
+                return 3;
+            }
+
+            Instr {
+                opcode: Opcode::JR,
+                op1: Some(Operands::Cond(cond)),
+                op2: Some(Operands::Imm8(i)),
+            } => {
+                if self.check_cond(cond) {
+                    let offset = i as i8;
+                    let curr_pc = self.pc as i32;
+                    let new_pc = curr_pc + offset as i32;
+                    self.pc = new_pc as u16;
+                    return 3;
+                }
+                return 2;
+            }
+
+            Instr {
+                opcode: Opcode::STOP,
+                op1: None,
+                op2: None,
+            } => {
+                return 0;
+            }
+            Instr {
+                opcode: Opcode::LD,
+                op1: Some(Operands::R8(dst)),
+                op2: Some(Operands::R8(src)),
+            } => {
+                let d = self.rreg8(src);
+                self.wreg8(dst, d);
+                return 2;
+            }
+            Instr {
+                opcode: Opcode::HALT,
+                op1: None,
+                op2: None,
+            } => {
+                todo!("HALT not implemented yet :(");
+            }
+            Instr {
+                opcode: Opcode::ADD,
+                op1: Some(Operands::A),
+                op2: Some(Operands::R8(reg)),
+            } => {
+                let reg_val = self.rreg8(reg);
+
+                self.h_f = does_bit3_overflow(reg_val, self.a);
+
+                let (new_val, does_overflow) = reg_val.overflowing_add(reg_val);
+                self.c_f = does_overflow;
+                self.z_f = new_val == 0;
+                self.n_f = false;
+                self.a = new_val;
+                return 1;
+            }
+            Instr {
+                opcode: Opcode::ADC,
+                op1: Some(Operands::A),
+                op2: Some(Operands::R8(r)),
+            } => {
+                self.n_f = false;
+
+                let reg_val = self.rreg8(r);
+                self.h_f = does_bit3_overflow(self.a, reg_val);
+
+                let (added, overflow) = reg_val.overflowing_add(self.a);
+                self.c_f = overflow;
+
+                // Next two conditionals check if the add with carry will overflow
+                if added == 0xF {
+                    self.h_f = true;
+                }
+
+                if added == 0xFF {
+                    self.c_f = true;
+                }
+
+                self.a = self.a.wrapping_add(1);
+                return 1;
+            }
+            Instr {
+                opcode: Opcode::SUB,
+                op1: Some(Operands::A),
+                op2: Some(Operands::R8(r)),
+            } => {
+                let reg_val = self.rreg8(r);
+
+                if does_bit3_borrow(self.a, reg_val) {
+                    self.h_f = true;
+                }
+
+                if reg_val > self.a {
+                    self.c_f = true;
+                } else {
+                    self.c_f = false;
+                }
+
+                self.n_f = false;
+                let new_val = self.a.wrapping_sub(reg_val);
+
+                if new_val == 0 {
+                    self.z_f = true;
+                } else {
+                    self.z_f = false;
+                }
+
+                self.a = new_val;
+                return 1;
+            }
+            Instr {
+                opcode: Opcode::SBC,
+                op1: Some(Operands::A),
+                op2: Some(Operands::R8(r)),
+            } => {
+                let carry = if self.c_f { 1 } else { 0 };
+                let reg_val = self.rreg8(r);
+
+                self.c_f = (reg_val + carry) > self.a;
+                self.h_f = does_bit3_borrow(self.a, reg_val + carry);
+
+                self.n_f = true;
+                self.a = self.a.wrapping_sub(reg_val + 1);
+                self.z_f = self.a == 0;
+                return 1;
+            }
+            Instr {
+                opcode: Opcode::AND,
+                op1: Some(Operands::A),
+                op2: Some(Operands::R8(r)),
+            } => {
+                self.a = self.a & self.rreg8(r);
+                self.z_f = if self.a == 0 { true } else { false };
+                self.n_f = false;
+                self.h_f = true;
+                self.c_f = false;
+                return 1;
+            }
+            Instr {
+                opcode: Opcode::XOR,
+                op1: Some(Operands::A),
+                op2: Some(Operands::R8(r)),
+            } => {
+                self.a = self.a ^ self.rreg8(r);
+                self.z_f = if self.a == 0 { true } else { false };
+                self.n_f = false;
+                self.h_f = false;
+                self.c_f = false;
+                return 1;
+            }
+            Instr {
+                opcode: Opcode::OR,
+                op1: Some(Operands::A),
+                op2: Some(Operands::R8(r)),
+            } => {
+                self.a = self.a | self.rreg8(r);
+                self.z_f = if self.a == 0 { true } else { false };
+                self.n_f = false;
+                self.h_f = false;
+                self.c_f = false;
+                return 1;
+            }
+            Instr {
+                opcode: Opcode::CP,
+                op1: Some(Operands::A),
+                op2: Some(Operands::R8(r)),
+            } => {
+                let reg_val = self.rreg8(r);
+
+                self.h_f = does_bit3_borrow(self.a, reg_val);
+                self.c_f = reg_val > self.a;
+                self.n_f = false;
+                let new_val = self.a.wrapping_sub(reg_val);
+                self.z_f = new_val == 0;
+
+                return 1;
+            }
+            Instr {
+                opcode: Opcode::ADD,
+                op1: Some(Operands::A),
+                op2: Some(Operands::Imm8(i)),
+            } => {
+                self.h_f = does_bit3_overflow(i, self.a);
+
+                let (new_val, does_overflow) = i.overflowing_add(self.a);
+                self.c_f = does_overflow;
+                self.z_f = new_val == 0;
+                self.n_f = false;
+                self.a = new_val;
+                return 2;
+            }
+            Instr {
+                opcode: Opcode::ADC,
+                op1: Some(Operands::A),
+                op2: Some(Operands::Imm8(i)),
+            } => {
+                self.n_f = false;
+                self.h_f = does_bit3_overflow(self.a, i);
+
+                let (added, overflow) = i.overflowing_add(self.a);
+                self.c_f = overflow;
+
+                // Next two conditionals check if the add with carry will overflow
+                if added == 0xF {
+                    self.h_f = true;
+                }
+
+                if added == 0xFF {
+                    self.c_f = true;
+                }
+
+                self.a = self.a.wrapping_add(1);
+                return 2;
+            }
+            Instr {
+                opcode: Opcode::SUB,
+                op1: Some(Operands::A),
+                op2: Some(Operands::Imm8(i)),
+            } => {
+                if does_bit3_borrow(self.a, i) {
+                    self.h_f = true;
+                }
+
+                self.c_f = i > self.a;
+                self.n_f = false;
+                let new_val = self.a.wrapping_sub(i);
+                self.z_f = new_val == 0;
+
+                self.a = new_val;
+                return 2;
+            }
+            Instr {
+                opcode: Opcode::SBC,
+                op1: Some(Operands::A),
+                op2: Some(Operands::Imm8(i)),
+            } => {
+                let carry = if self.c_f { 1 } else { 0 };
+
+                self.c_f = i + carry > self.a;
+                self.h_f = does_bit3_borrow(self.a, i + carry);
+
+                self.n_f = true;
+                self.a = self.a.wrapping_sub(i + carry);
+                self.z_f = self.a == 0;
+                return 2;
+            }
+            Instr {
+                opcode: Opcode::AND,
+                op1: Some(Operands::A),
+                op2: Some(Operands::Imm8(i)),
+            } => {
+                self.a = self.a & i;
+                self.z_f = if self.a == 0 { true } else { false };
+                self.n_f = false;
+                self.h_f = true;
+                self.c_f = false;
+                return 2;
+            }
+            Instr {
+                opcode: Opcode::XOR,
+                op1: Some(Operands::A),
+                op2: Some(Operands::Imm8(i)),
+            } => {
+                self.a = self.a ^ i;
+                self.z_f = if self.a == 0 { true } else { false };
+                self.n_f = false;
+                self.h_f = false;
+                self.c_f = false;
+                return 2;
+            }
+            Instr {
+                opcode: Opcode::OR,
+                op1: Some(Operands::A),
+                op2: Some(Operands::Imm8(i)),
+            } => {
+                self.a = self.a | i;
+                self.z_f = if self.a == 0 { true } else { false };
+                self.n_f = false;
+                self.h_f = false;
+                self.c_f = false;
+                return 2;
+            }
+            Instr {
+                opcode: Opcode::CP,
+                op1: Some(Operands::A),
+                op2: Some(Operands::Imm8(i)),
+            } => {
+                self.h_f = does_bit3_borrow(self.a, i);
+                self.c_f = i > self.a;
+
+                self.n_f = false;
+                let new_val = self.a.wrapping_sub(i);
+                self.z_f = new_val == 0;
+                return 2;
+            }
+            Instr {
+                opcode: Opcode::RET,
+                op1: Some(Operands::Cond(cond)),
+                op2: None,
+            } => {
+                todo!("No")
+            }
+            Instr {
+                opcode: Opcode::RET,
+                op1: None,
+                op2: None,
+            } => {
+                todo!("No")
+            }
+            Instr {
+                opcode: Opcode::RETI,
+                op1: None,
+                op2: None,
+            } => {
+                todo!("No")
+            }
+            Instr {
+                opcode: Opcode::JP,
+                op1: Some(Operands::Cond(cond)),
+                op2: Some(Operands::Imm16(i)),
+            } => {
+                todo!("No")
+            }
+            Instr {
+                opcode: Opcode::JP,
+                op1: Some(Operands::Imm16(i)),
+                op2: None,
+            } => {
+                self.pc = i;
+                return 4;
+            }
+
+            _ => unreachable!("Unhandle instruction! {:?}", instr),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ld_decode() {
+        // Instr taken from: https://github.com/retrio/gb-test-roms/blob/master/cpu_instrs/source/04-op%20r%2Cimm.s
+        let program = [
+            0x36, 0x00, 0x06, 0x00, 0x0E, 0x00, 0x16, 0x00, 0x1E, 0x00, 0x26, 0x00, 0x2E, 0x00,
+            0x3E, 0x00, 0xF6, 0x00, 0xFE, 0x00, 0xC6, 0x00, 0xCE, 0x00, 0xD6, 0x00, 0xDE, 0x00,
+            0xE6, 0x00, 0xEE, 0x00,
+        ];
+
+        let mut cpu = Cpu::new();
+        cpu.memory[0..32].copy_from_slice(&program);
+
+        for _ in 0..16 {
+            let next_instr = cpu.next_instr();
+            /*
+            println!(
+                "{:?} {:?} {:?}",
+                next_instr.opcode, next_instr.op1, next_instr.op2
+            );
+            */
+
+            let _clks = cpu.execute_instr(next_instr);
+        }
+    }
+
+    #[test]
+    fn basic_prog() {
+        let program = [0x06, 0xaa, 0x0e, 0x55, 0x3e, 0x00, 0xb0, 0xb1, 0x3c, 0x10];
+
+        let mut cpu = Cpu::new();
+        cpu.memory[0..program.len()].copy_from_slice(&program);
+
+        // ld b, $AA
+        // ld c, $55
+        // ld a, $0
+        // or a, b
+        // or a, c
+        // inc a
+        // stop
+
+        let exp_instrs = [
+            Opcode::LD,
+            Opcode::LD,
+            Opcode::LD,
+            Opcode::OR,
+            Opcode::OR,
+            Opcode::INC,
+            Opcode::STOP,
+        ];
+
+        for exp_instr in exp_instrs {
+            let next_instr = cpu.next_instr();
+            /*
+
+                        println!(
+                            "{:?} {:?} {:?}",
+                            next_instr.opcode, next_instr.op1, next_instr.op2
+                        );
+                        println!(
+                            "A: {:X} B: {:X} C: {:X}",
+                            cpu.a, cpu.b, cpu.c
+                        );
+
+            */
+
+            cpu.log_state();
+
+            assert_eq!(exp_instr, next_instr.opcode);
+            let clks = cpu.execute_instr(next_instr);
+            if clks == 0 {
+                break;
+            }
+        }
+    }
+}
