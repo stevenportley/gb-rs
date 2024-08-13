@@ -34,6 +34,8 @@ pub struct Cpu {
     h_f: bool,
     c_f: bool,
 
+    ime: bool,
+
     pub memory: [u8; 0x10000],
 }
 
@@ -53,6 +55,8 @@ enum Operands {
     Imm16(u16), //TODO(SP): This needs to be little-endian, make sure to test this
     SpImm8(u8), // This is SP + Imm8
 }
+
+const PAGE0_OFFSET: u16 = 0xFF00;
 
 // Bit indices to address particular register
 const A_REG: u8 = 7;
@@ -132,6 +136,7 @@ impl Cpu {
             c_f: true,
             n_f: false,
             z_f: true,
+            ime: false,
             memory: [0; 0x10000],
         }
     }
@@ -255,17 +260,32 @@ impl Cpu {
                 self.memory[hl as usize] = val;
                 hl = hl + 1;
                 self.h = (hl >> 8) as u8;
-                self.l = (hl & 0xF) as u8;
+                self.l = (hl & 0xFF) as u8;
             }
-            4 => {
+            3 => {
                 let mut hl = make_u16(self.h, self.l);
                 self.memory[hl as usize] = val;
                 hl = hl.wrapping_sub(1);
                 self.h = (hl >> 8) as u8;
-                self.l = (hl & 0xF) as u8;
+                self.l = (hl & 0xFF) as u8;
             }
             _ => unreachable!("rr16mem with invalid bit index! {r16mem}"),
         }
+    }
+
+    fn push_stack(&mut self, val: u16) {
+        self.sp = self.sp - 1;
+        self.memory[self.sp as usize] = (val >> 8) as u8;
+        self.sp = self.sp - 1;
+        self.memory[self.sp as usize] = (val & 0xFF) as u8;
+    }
+
+    fn pop_stack(&mut self) -> u16 {
+        let mut ret = self.memory[self.sp as usize] as u16;
+        self.sp = self.sp + 1;
+        ret |= (self.memory[self.sp as usize] as u16) << 8;
+        self.sp = self.sp + 1;
+        return ret;
     }
 
     fn check_cond(&self, cond: u8) -> bool {
@@ -349,7 +369,7 @@ impl Cpu {
                     op1: Some(Operands::HL),
                     op2: Some(Operands::R16(op2)),
                 }
-            } else if lower_four == 0x8 {
+            } else if opcode == 0x8 {
                 let op1 = self.load_word();
                 Instr {
                     opcode: Opcode::LD,
@@ -615,35 +635,19 @@ impl Cpu {
             }
 
             0xF3 => {
-                //TODO(SP): Interrupts
-                return Instr {
-                    opcode: Opcode::NOP,
-                    op1: None,
-                    op2: None,
-                };
-
-                /*
                 return Instr {
                     opcode: Opcode::DI,
                     op1: None,
                     op2: None,
                 };
-                */
             }
 
             0xFB => {
-                return Instr {
-                    opcode: Opcode::NOP,
-                    op1: None,
-                    op2: None,
-                };
-                /*
                 return Instr {
                     opcode: Opcode::EI,
                     op1: None,
                     op2: None,
                 };
-                */
             }
 
             _ => {}
@@ -725,6 +729,16 @@ impl Cpu {
                 opcode: Opcode::JP,
                 op1: Some(Operands::HL),
                 op2: None,
+            };
+        }
+
+        if lower_three == 0x4 {
+            let bit43 = (opcode >> 3) & 0x3;
+            let next_word = self.load_word();
+            return Instr {
+                opcode: Opcode::CALL,
+                op1: Some(Operands::Cond(bit43)),
+                op2: Some(Operands::Imm16(next_word)),
             };
         }
 
@@ -1101,25 +1115,12 @@ impl Cpu {
                 op2: Some(Operands::R8(r)),
             } => {
                 let reg_val = self.rreg8(r);
-
-                if does_bit3_borrow(self.a, reg_val) {
-                    self.h_f = true;
-                }
-
-                if reg_val > self.a {
-                    self.c_f = true;
-                } else {
-                    self.c_f = false;
-                }
-
-                self.n_f = false;
                 let new_val = self.a.wrapping_sub(reg_val);
 
-                if new_val == 0 {
-                    self.z_f = true;
-                } else {
-                    self.z_f = false;
-                }
+                self.h_f = does_bit3_borrow(self.a, reg_val);
+                self.c_f = reg_val > self.a;
+                self.n_f = true;
+                self.z_f = new_val == 0;
 
                 self.a = new_val;
                 return 1;
@@ -1233,16 +1234,14 @@ impl Cpu {
                 op1: Some(Operands::A),
                 op2: Some(Operands::Imm8(i)),
             } => {
-                if does_bit3_borrow(self.a, i) {
-                    self.h_f = true;
-                }
-
-                self.c_f = i > self.a;
-                self.n_f = false;
                 let new_val = self.a.wrapping_sub(i);
-                self.z_f = new_val == 0;
 
+                self.h_f = does_bit3_borrow(self.a, i);
+                self.c_f = i > self.a;
+                self.n_f = true;
+                self.z_f = new_val == 0;
                 self.a = new_val;
+
                 return 2;
             }
             Instr {
@@ -1304,7 +1303,7 @@ impl Cpu {
                 self.h_f = does_bit3_borrow(self.a, i);
                 self.c_f = i > self.a;
 
-                self.n_f = false;
+                self.n_f = true;
                 let new_val = self.a.wrapping_sub(i);
                 self.z_f = new_val == 0;
                 return 2;
@@ -1314,28 +1313,34 @@ impl Cpu {
                 op1: Some(Operands::Cond(cond)),
                 op2: None,
             } => {
-                todo!("No")
+                if !self.check_cond(cond) {
+                    return 2;
+                }
+
+                self.pc = self.pop_stack();
+                return 5;
             }
             Instr {
                 opcode: Opcode::RET,
                 op1: None,
                 op2: None,
             } => {
-                todo!("No")
+                self.pc = self.pop_stack();
+                return 4;
             }
             Instr {
                 opcode: Opcode::RETI,
                 op1: None,
                 op2: None,
             } => {
-                todo!("No")
+                todo!("Instruction not implemented")
             }
             Instr {
                 opcode: Opcode::JP,
                 op1: Some(Operands::Cond(cond)),
                 op2: Some(Operands::Imm16(i)),
             } => {
-                todo!("No")
+                todo!("Instruction not implemented")
             }
             Instr {
                 opcode: Opcode::JP,
@@ -1344,6 +1349,215 @@ impl Cpu {
             } => {
                 self.pc = i;
                 return 4;
+            }
+            Instr {
+                opcode: Opcode::JP,
+                op1: Some(Operands::HL),
+                op2: None,
+            } => {
+                todo!("Instruction not implemented");
+            }
+            Instr {
+                opcode: Opcode::CALL,
+                op1: Some(Operands::Cond(cond)),
+                op2: Some(Operands::Imm16(i)),
+            } => {
+                if !self.check_cond(cond) {
+                    return 3;
+                }
+
+                self.push_stack(self.pc);
+                self.pc = i;
+                return 6;
+            }
+            Instr {
+                opcode: Opcode::CALL,
+                op1: Some(Operands::Imm16(i)),
+                op2: None,
+            } => {
+                self.push_stack(self.pc);
+                self.pc = i;
+                return 6;
+            }
+            Instr {
+                opcode: Opcode::RST,
+                op1: Some(Operands::Tgt3(tgt)),
+                op2: None,
+            } => {
+                todo!("Instruction not implemented");
+            }
+            Instr {
+                opcode: Opcode::POP,
+                op1: Some(Operands::R16Stk(r16stk)),
+                op2: None,
+            } => {
+                match r16stk {
+                    0 => {
+                        let val = self.pop_stack();
+                        self.b = (val >> 8) as u8;
+                        self.c = (val & 0xFF) as u8;
+                    }
+                    1 => {
+                        let val = self.pop_stack();
+                        self.d = (val >> 8) as u8;
+                        self.e = (val & 0xFF) as u8;
+                    }
+                    2 => {
+                        let val = self.pop_stack();
+                        self.h = (val >> 8) as u8;
+                        self.l = (val & 0xFF) as u8;
+                    }
+                    3 => {
+                        let val = self.pop_stack();
+                        self.a = (val >> 8) as u8;
+                        self.z_f = (val & 0x80) == 0x80;
+                        self.n_f = (val & 0x40) == 0x40;
+                        self.h_f = (val & 0x20) == 0x20;
+                        self.c_f = (val & 0x10) == 0x10;
+                    }
+                    _ => {
+                        unreachable!("Popping from the stack with an invalid r16stk: {:?}", instr);
+                    }
+                }
+                return 3;
+            }
+            Instr {
+                opcode: Opcode::PUSH,
+                op1: Some(Operands::R16Stk(r16stk)),
+                op2: None,
+            } => {
+                let val = match r16stk {
+                    0 => ((self.b as u16) << 8) | (self.c as u16),
+                    1 => ((self.d as u16) << 8) | (self.e as u16),
+                    2 => ((self.h as u16) << 8) | (self.l as u16),
+                    3 => {
+                        let mut val = (self.a as u16) << 8;
+                        val = if self.z_f { val | 0x80 } else { val };
+                        val = if self.n_f { val | 0x40 } else { val };
+                        val = if self.h_f { val | 0x20 } else { val };
+                        val = if self.c_f { val | 0x10 } else { val };
+                        val
+                    }
+                    _ => {
+                        unreachable!("Popping from the stack with an invalid r16stk: {:?}", instr);
+                    }
+                };
+
+                self.push_stack(val);
+                return 4;
+            }
+            /*
+             * TODO(SP): Add 0xCB prefix instructions here!
+             */
+            Instr {
+                opcode: Opcode::LDH,
+                op1: Some(Operands::R8(C_REG)),
+                op2: Some(Operands::A),
+            } => {
+                todo!("Instruction not implemented");
+            }
+            Instr {
+                opcode: Opcode::LDH,
+                op1: Some(Operands::Imm8(i)),
+                op2: Some(Operands::A),
+            } => {
+                self.memory[(i as u16 + PAGE0_OFFSET) as usize] = self.a;
+                return 3;
+            }
+            Instr {
+                opcode: Opcode::LD,
+                op1: Some(Operands::Imm16(i)),
+                op2: Some(Operands::A),
+            } => {
+                self.memory[i as usize] = self.a;
+                return 4;
+            }
+            Instr {
+                opcode: Opcode::LDH,
+                op1: Some(Operands::A),
+                op2: Some(Operands::R8(C_REG)),
+            } => {
+                self.a = self.memory[(self.c as u16 + PAGE0_OFFSET) as usize];
+                return 2;
+            }
+            Instr {
+                opcode: Opcode::LDH,
+                op1: Some(Operands::A),
+                op2: Some(Operands::Imm8(i)),
+            } => {
+                //todo!("test123: {:?}", instr);
+                self.a = self.memory[(i as u16 + PAGE0_OFFSET) as usize];
+                return 3;
+            }
+            Instr {
+                opcode: Opcode::LD,
+                op1: Some(Operands::A),
+                op2: Some(Operands::Imm16(i)),
+            } => {
+                self.a = self.memory[i as usize];
+                return 4;
+            }
+            Instr {
+                opcode: Opcode::ADD,
+                op1: Some(Operands::SP),
+                op2: Some(Operands::Imm8(i)),
+            } => {
+                let s_i = i as i8;
+
+                let new_sp = self.sp.wrapping_add(s_i as u16);
+                self.z_f = false;
+                self.n_f = false;
+                self.h_f = does_bit3_overflow(i, self.sp as u8);
+
+                let (_, does_bit7_of) = (self.sp as u8).overflowing_add(i);
+                self.c_f = does_bit7_of;
+
+                self.sp = new_sp;
+                return 4;
+            }
+            Instr {
+                opcode: Opcode::LD,
+                op1: Some(Operands::HL),
+                op2: Some(Operands::SpImm8(i)),
+            } => {
+                let new_sp = self.sp.wrapping_add(i as u16);
+
+                self.z_f = false;
+                self.n_f = false;
+                self.h_f = does_bit3_overflow(i, self.sp as u8);
+
+                // TODO(SP): This may be wrong
+                let (_, does_of) = (self.sp as u8).overflowing_add(self.sp as u8);
+
+                self.c_f = does_of;
+                self.sp = new_sp;
+
+                return 3;
+            }
+            Instr {
+                opcode: Opcode::LD,
+                op1: Some(Operands::SP),
+                op2: Some(Operands::HL),
+            } => {
+                let new_sp = ((self.h as u16) << 8) | self.l as u16;
+                self.sp = new_sp;
+                return 2;
+            }
+            Instr {
+                opcode: Opcode::DI,
+                op1: None,
+                op2: None,
+            } => {
+                self.ime = false;
+                return 1;
+            }
+            Instr {
+                opcode: Opcode::EI,
+                op1: None,
+                op2: None,
+            } => {
+                self.ime = true;
+                return 1;
             }
 
             _ => unreachable!("Unhandle instruction! {:?}", instr),
