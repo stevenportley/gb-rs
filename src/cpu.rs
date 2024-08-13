@@ -1,3 +1,6 @@
+use crate::bus::Bus;
+use std::io;
+
 fn does_bit3_overflow(a: u8, b: u8) -> bool {
     let a = a & 0xF;
     let b = b & 0xF;
@@ -36,7 +39,7 @@ pub struct Cpu {
 
     ime: bool,
 
-    pub memory: [u8; 0x10000],
+    pub bus: Bus,
 }
 
 #[derive(Debug)]
@@ -121,8 +124,8 @@ pub struct Instr {
 }
 
 impl Cpu {
-    pub fn new() -> Cpu {
-        Cpu {
+    pub fn new<T: io::Read>(rom: T) -> io::Result<Self> {
+        let mut cpu = Cpu {
             a: 0x01,
             b: 0x00,
             c: 0x13,
@@ -137,8 +140,12 @@ impl Cpu {
             n_f: false,
             z_f: true,
             ime: false,
-            memory: [0; 0x10000],
-        }
+            bus: Bus::new(rom)?,
+        };
+
+        // Temporary to make LCD work with test ROMs
+        cpu.bus.write(0xFF44, 0x90);
+        Ok(cpu)
     }
 
     fn get_f(&self) -> u8 {
@@ -161,7 +168,7 @@ impl Cpu {
                 // This is a special case, instead of setting a register,
                 // we use the memory location pointed to by the HL register
                 let hl = ((self.h as u16) << 8) | (self.l as u16);
-                return self.memory[hl as usize];
+                return self.bus.read(hl);
             }
             7 => return self.a,
             _ => unreachable!("rreg8 with invalid bit index! {dst}"),
@@ -180,7 +187,7 @@ impl Cpu {
                 // This is a special case, instead of setting a register,
                 // we use the memory location pointed to by the HL register
                 let hl = ((self.h as u16) << 8) | (self.l as u16);
-                self.memory[hl as usize] = val;
+                self.bus.write(hl, val);
             }
             7 => self.a = val,
             _ => unreachable!("Set reg8 with invalid bit index! {dst}"),
@@ -228,11 +235,11 @@ impl Cpu {
     fn rr16mem(&mut self, r16mem: u8) -> u8 {
         let make_u16 = |h, l| -> u16 { (h as u16) << 8 | (l as u16) };
         match r16mem {
-            0 => return self.memory[make_u16(self.b, self.c) as usize],
-            1 => return self.memory[make_u16(self.d, self.e) as usize],
+            0 => return self.bus.read(make_u16(self.b, self.c)),
+            1 => return self.bus.read(make_u16(self.d, self.e)),
             2 => {
                 let mut hl = make_u16(self.h, self.l);
-                let ret = self.memory[hl as usize];
+                let ret = self.bus.read(hl);
                 hl = hl + 1;
                 self.h = (hl >> 8) as u8;
                 self.l = (hl & 0xFF) as u8;
@@ -240,10 +247,10 @@ impl Cpu {
             }
             4 => {
                 let mut hl = make_u16(self.h, self.l);
-                let ret = self.memory[hl as usize];
+                let ret = self.bus.read(hl);
                 hl = hl.wrapping_sub(1);
                 self.h = (hl >> 8) as u8;
-                self.l = (hl & 0xF) as u8;
+                self.l = (hl & 0xFF) as u8;
                 return ret;
             }
             _ => unreachable!("rr16mem with invalid bit index! {r16mem}"),
@@ -253,18 +260,18 @@ impl Cpu {
     fn wr16mem(&mut self, r16mem: u8, val: u8) {
         let make_u16 = |h, l| -> u16 { (h as u16) << 8 | (l as u16) };
         match r16mem {
-            0 => self.memory[make_u16(self.b, self.c) as usize] = val,
-            1 => self.memory[make_u16(self.d, self.e) as usize] = val,
+            0 => self.bus.write(make_u16(self.b, self.c), val),
+            1 => self.bus.write(make_u16(self.d, self.e), val),
             2 => {
                 let mut hl = make_u16(self.h, self.l);
-                self.memory[hl as usize] = val;
+                self.bus.write(hl, val);
                 hl = hl + 1;
                 self.h = (hl >> 8) as u8;
                 self.l = (hl & 0xFF) as u8;
             }
             3 => {
                 let mut hl = make_u16(self.h, self.l);
-                self.memory[hl as usize] = val;
+                self.bus.write(hl, val);
                 hl = hl.wrapping_sub(1);
                 self.h = (hl >> 8) as u8;
                 self.l = (hl & 0xFF) as u8;
@@ -275,15 +282,15 @@ impl Cpu {
 
     fn push_stack(&mut self, val: u16) {
         self.sp = self.sp - 1;
-        self.memory[self.sp as usize] = (val >> 8) as u8;
+        self.bus.write(self.sp, (val >> 8) as u8);
         self.sp = self.sp - 1;
-        self.memory[self.sp as usize] = (val & 0xFF) as u8;
+        self.bus.write(self.sp, (val & 0xFF) as u8);
     }
 
     fn pop_stack(&mut self) -> u16 {
-        let mut ret = self.memory[self.sp as usize] as u16;
+        let mut ret = self.bus.read(self.sp) as u16;
         self.sp = self.sp + 1;
-        ret |= (self.memory[self.sp as usize] as u16) << 8;
+        ret |= (self.bus.read(self.sp) as u16) << 8;
         self.sp = self.sp + 1;
         return ret;
     }
@@ -299,7 +306,7 @@ impl Cpu {
     }
 
     fn load_byte(&mut self) -> u8 {
-        let next_byte = self.memory[self.pc as usize];
+        let next_byte = self.bus.read(self.pc);
         self.pc += 1;
         return next_byte;
     }
@@ -767,7 +774,7 @@ impl Cpu {
     }
 
     pub fn next_instr(&mut self) -> Instr {
-        let opcode = self.memory[self.pc as usize];
+        let opcode = self.bus.read(self.pc);
         self.pc += 1;
 
         let instr = match opcode {
@@ -794,10 +801,10 @@ impl Cpu {
             self.l,
             self.sp,
             self.pc,
-            self.memory[self.pc as usize],
-            self.memory[self.pc as usize + 1],
-            self.memory[self.pc as usize + 2],
-            self.memory[self.pc as usize + 3]);
+            self.bus.read(self.pc),
+            self.bus.read(self.pc + 1),
+            self.bus.read(self.pc + 2),
+            self.bus.read(self.pc + 3));
     }
 
     pub fn execute_instr(&mut self, instr: Instr) -> usize {
@@ -837,8 +844,8 @@ impl Cpu {
                 op2: Some(Operands::SP),
             } => {
                 // This is why: https://rgbds.gbdev.io/docs/v0.8.0/gbz80.7#LD__n16_,SP
-                self.memory[i as usize] = self.sp as u8;
-                self.memory[(i + 1) as usize] = (self.sp >> 8) as u8;
+                self.bus.write(i, self.sp as u8);
+                self.bus.write(i + 1, (self.sp >> 8) as u8);
                 return 5;
             }
             Instr {
@@ -1461,7 +1468,7 @@ impl Cpu {
                 op1: Some(Operands::Imm8(i)),
                 op2: Some(Operands::A),
             } => {
-                self.memory[(i as u16 + PAGE0_OFFSET) as usize] = self.a;
+                self.bus.write(i as u16 + PAGE0_OFFSET, self.a);
                 return 3;
             }
             Instr {
@@ -1469,7 +1476,7 @@ impl Cpu {
                 op1: Some(Operands::Imm16(i)),
                 op2: Some(Operands::A),
             } => {
-                self.memory[i as usize] = self.a;
+                self.bus.write(i, self.a);
                 return 4;
             }
             Instr {
@@ -1477,7 +1484,7 @@ impl Cpu {
                 op1: Some(Operands::A),
                 op2: Some(Operands::R8(C_REG)),
             } => {
-                self.a = self.memory[(self.c as u16 + PAGE0_OFFSET) as usize];
+                self.a = self.bus.read(self.c as u16 + PAGE0_OFFSET);
                 return 2;
             }
             Instr {
@@ -1485,8 +1492,7 @@ impl Cpu {
                 op1: Some(Operands::A),
                 op2: Some(Operands::Imm8(i)),
             } => {
-                //todo!("test123: {:?}", instr);
-                self.a = self.memory[(i as u16 + PAGE0_OFFSET) as usize];
+                self.a = self.bus.read(i as u16 + PAGE0_OFFSET);
                 return 3;
             }
             Instr {
@@ -1494,7 +1500,7 @@ impl Cpu {
                 op1: Some(Operands::A),
                 op2: Some(Operands::Imm16(i)),
             } => {
-                self.a = self.memory[i as usize];
+                self.a = self.bus.read(i);
                 return 4;
             }
             Instr {
@@ -1579,7 +1585,7 @@ mod tests {
         ];
 
         let mut cpu = Cpu::new();
-        cpu.memory[0..32].copy_from_slice(&program);
+        //cpu.memory[0..32].copy_from_slice(&program);
 
         for _ in 0..16 {
             let next_instr = cpu.next_instr();
@@ -1599,7 +1605,7 @@ mod tests {
         let program = [0x06, 0xaa, 0x0e, 0x55, 0x3e, 0x00, 0xb0, 0xb1, 0x3c, 0x10];
 
         let mut cpu = Cpu::new();
-        cpu.memory[0..program.len()].copy_from_slice(&program);
+        //cpu.memory[0..program.len()].copy_from_slice(&program);
 
         // ld b, $AA
         // ld c, $55

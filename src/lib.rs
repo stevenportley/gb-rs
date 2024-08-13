@@ -1,4 +1,5 @@
 pub mod cpu;
+pub mod bus;
 
 pub fn add(left: usize, right: usize) -> usize {
     left + right

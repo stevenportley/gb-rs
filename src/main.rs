@@ -1,10 +1,10 @@
 use std::env;
+use std::io;
 use gb_rs::cpu::Cpu;
-use std::fs::read;
 
 use std::path::Path;
 
-fn main() {
+fn main() -> io::Result<()> {
 
     let args: Vec<String> = env::args().collect();
 
@@ -14,14 +14,8 @@ fn main() {
         Path::new(&args[1])
     };
 
-
-    let mut cpu = Cpu::new();
-
-
     let rom = std::fs::read(path).expect("Unable to load rom file");
-
-    cpu.memory[0..32768].copy_from_slice(&rom);
-    cpu.memory[0xFF44] = 0x90;
+    let mut cpu = Cpu::new(rom.as_slice())?;
 
     loop {
 
@@ -32,9 +26,7 @@ fn main() {
             break;
         }
 
-
     }
 
-
-
+    Ok(())
 }
