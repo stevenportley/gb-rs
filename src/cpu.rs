@@ -295,6 +295,50 @@ impl Cpu {
         return ret;
     }
 
+    fn rlc(&mut self, reg: u8) {
+        let reg_val = self.rreg8(reg);
+        let msb = reg_val >> 7;
+        self.c_f = msb == 1;
+        self.z_f = false;
+        self.n_f = false;
+        self.h_f = false;
+        self.wreg8(reg, (reg_val << 1) | msb);
+    }
+
+    fn rl(&mut self, reg: u8) {
+        let reg_val = self.rreg8(reg);
+        let msb = reg_val >> 7;
+        let new_lsb = if self.c_f { 1 } else { 0 };
+
+        self.wreg8(reg, (reg_val << 1) | new_lsb);
+        self.z_f = false;
+        self.n_f = false;
+        self.h_f = false;
+        self.c_f = msb == 1;
+    }
+
+    fn rrc(&mut self, reg: u8) {
+        let reg_val = self.rreg8(reg);
+        let lsb = reg_val & 1;
+
+        self.a = (reg_val >> 1) | (lsb << 7);
+        self.z_f = false;
+        self.n_f = false;
+        self.h_f = false;
+        self.c_f = lsb == 1;
+    }
+
+    fn rr(&mut self, reg: u8) {
+        let reg_val = self.rreg8(reg);
+        let new_msb = if self.c_f { 0x80 } else { 0 };
+
+        self.wreg8(reg, (reg_val >> 1) | new_msb);
+        self.z_f = false;
+        self.n_f = false;
+        self.h_f = false;
+        self.c_f = (reg_val & 1) == 1;
+    }
+
     fn check_cond(&self, cond: u8) -> bool {
         match cond {
             0 => return !self.z_f,
@@ -661,7 +705,8 @@ impl Cpu {
         }
 
         if opcode == 0xCB {
-            todo!("0xCB instructions are not implemented yet!");
+            let next_byte = self.load_byte();
+            return Cpu::cb_prefix_decode(next_byte);
         }
 
         let lower_four = opcode & 0xF;
@@ -771,6 +816,99 @@ impl Cpu {
             "Block3 opcode decoding failed. Illegal opcode: {:#04x}",
             opcode
         );
+    }
+
+    fn cb_prefix_decode(opcode: u8) -> Instr {
+        let masked = opcode >> 3;
+        let lower_three = opcode & 0x7;
+        let bit76 = opcode >> 6;
+        match masked {
+            0 => {
+                return Instr {
+                    opcode: Opcode::RLC,
+                    op1: Some(Operands::R8(lower_three)),
+                    op2: None,
+                };
+            }
+            1 => {
+                return Instr {
+                    opcode: Opcode::RRC,
+                    op1: Some(Operands::R8(lower_three)),
+                    op2: None,
+                };
+            }
+            2 => {
+                return Instr {
+                    opcode: Opcode::RL,
+                    op1: Some(Operands::R8(lower_three)),
+                    op2: None,
+                };
+            }
+            3 => {
+                return Instr {
+                    opcode: Opcode::RR,
+                    op1: Some(Operands::R8(lower_three)),
+                    op2: None,
+                };
+            }
+            4 => {
+                return Instr {
+                    opcode: Opcode::SLA,
+                    op1: Some(Operands::R8(lower_three)),
+                    op2: None,
+                };
+            }
+            5 => {
+                return Instr {
+                    opcode: Opcode::SRA,
+                    op1: Some(Operands::R8(lower_three)),
+                    op2: None,
+                };
+            }
+            6 => {
+                return Instr {
+                    opcode: Opcode::SWAP,
+                    op1: Some(Operands::R8(lower_three)),
+                    op2: None,
+                };
+            }
+            7 => {
+                return Instr {
+                    opcode: Opcode::SRL,
+                    op1: Some(Operands::R8(lower_three)),
+                    op2: None,
+                };
+            }
+            _ => {}
+        };
+
+        let bit543 = (opcode >> 3) & 0x7;
+        match bit76 {
+            1 => {
+                return Instr {
+                    opcode: Opcode::BIT,
+                    op1: Some(Operands::B3(bit543)),
+                    op2: Some(Operands::R8(lower_three)),
+                };
+            }
+            2 => {
+                return Instr {
+                    opcode: Opcode::RES,
+                    op1: Some(Operands::B3(bit543)),
+                    op2: Some(Operands::R8(lower_three)),
+                };
+            }
+            3 => {
+                return Instr {
+                    opcode: Opcode::SET,
+                    op1: Some(Operands::B3(bit543)),
+                    op2: Some(Operands::R8(lower_three)),
+                };
+            }
+            _ => {}
+        }
+
+        unreachable!("Invalid opcode: {opcode}");
     }
 
     pub fn next_instr(&mut self) -> Instr {
@@ -934,13 +1072,7 @@ impl Cpu {
                 op1: None,
                 op2: None,
             } => {
-                let msb = self.a >> 7;
-
-                self.a = (self.a << 1) | msb;
-                self.z_f = false;
-                self.n_f = false;
-                self.h_f = false;
-                self.c_f = msb == 1;
+                self.rlc(A_REG);
                 return 1;
             }
             Instr {
@@ -948,13 +1080,7 @@ impl Cpu {
                 op1: None,
                 op2: None,
             } => {
-                let lsb = self.a & 1;
-
-                self.a = (self.a >> 1) | (lsb << 7);
-                self.z_f = false;
-                self.n_f = false;
-                self.h_f = false;
-                self.c_f = lsb == 1;
+                self.rrc(A_REG);
                 return 1;
             }
             Instr {
@@ -962,14 +1088,7 @@ impl Cpu {
                 op1: None,
                 op2: None,
             } => {
-                let msb = self.a >> 7;
-                let new_lsb = if self.c_f { 1 } else { 0 };
-
-                self.a = (self.a << 1) | new_lsb;
-                self.z_f = false;
-                self.n_f = false;
-                self.h_f = false;
-                self.c_f = msb == 1;
+                self.rl(A_REG);
                 return 1;
             }
             Instr {
@@ -977,14 +1096,7 @@ impl Cpu {
                 op1: None,
                 op2: None,
             } => {
-                let lsb = self.a & 1;
-                let new_msb = if self.c_f { 0x80 } else { 0 };
-
-                self.a = (self.a >> 1) | (new_msb);
-                self.z_f = false;
-                self.n_f = false;
-                self.h_f = false;
-                self.c_f = lsb == 1;
+                self.rr(A_REG);
                 return 1;
             }
             Instr {
@@ -1564,6 +1676,101 @@ impl Cpu {
             } => {
                 self.ime = true;
                 return 1;
+            }
+            Instr {
+                opcode: Opcode::RLC,
+                op1: Some(Operands::R8(r)),
+                op2: None,
+            } => {
+                self.rlc(r);
+                return if r == HL_REG { 4 } else { 2 };
+            }
+            Instr {
+                opcode: Opcode::RRC,
+                op1: Some(Operands::R8(r)),
+                op2: None,
+            } => {
+                self.rrc(r);
+                return if r == HL_REG { 4 } else { 2 };
+            }
+            Instr {
+                opcode: Opcode::RL,
+                op1: Some(Operands::R8(r)),
+                op2: None,
+            } => {
+                self.rl(r);
+                return if r == HL_REG { 4 } else { 2 };
+            }
+            Instr {
+                opcode: Opcode::RR,
+                op1: Some(Operands::R8(r)),
+                op2: None,
+            } => {
+                self.rr(r);
+                return if r == HL_REG { 4 } else { 2 };
+            }
+            Instr {
+                opcode: Opcode::SLA,
+                op1: Some(Operands::R8(r)),
+                op2: None,
+            } => {
+                let reg_val = self.rreg8(r);
+                let new_val = reg_val << 1;
+                self.wreg8(r, new_val);
+
+                self.c_f = (reg_val & 0x80) == 0x80;
+                self.n_f = false;
+                self.h_f = false;
+                self.z_f = new_val == 0;
+                return if r == HL_REG { 4 } else { 2 };
+            }
+            Instr {
+                opcode: Opcode::SRA,
+                op1: Some(Operands::R8(r)),
+                op2: None,
+            } => {
+                let reg_val = self.rreg8(r);
+                let msb = reg_val & 0x80;
+                let new_val = (reg_val >> 1) | msb;
+                self.wreg8(r, new_val);
+
+                self.c_f = (reg_val & 0x1) == 0x1;
+                self.n_f = false;
+                self.h_f = false;
+                self.z_f = new_val == 0;
+                return if r == HL_REG { 4 } else { 2 };
+            }
+            Instr {
+                opcode: Opcode::SWAP,
+                op1: Some(Operands::R8(r)),
+                op2: None,
+            } => {
+                let reg_val = self.rreg8(r);
+                let upper_nibble = reg_val >> 4;
+                let lower_nibble = reg_val & 0xF;
+                let new_val = (lower_nibble << 4) | upper_nibble;
+                self.wreg8(r, new_val);
+
+                self.z_f = new_val == 0;
+                self.n_f = false;
+                self.h_f = false;
+                self.c_f = false;
+                return if r == HL_REG { 4 } else { 2 };
+            }
+            Instr {
+                opcode: Opcode::SRL,
+                op1: Some(Operands::R8(r)),
+                op2: None,
+            } => {
+                let reg_val = self.rreg8(r);
+                let new_val = reg_val >> 1;
+                self.wreg8(r, new_val);
+
+                self.z_f = new_val == 0;
+                self.n_f = false;
+                self.h_f = false;
+                self.c_f = (reg_val & 0x1) == 0x1;
+                return if r == HL_REG { 4 } else { 2 };
             }
 
             _ => unreachable!("Unhandle instruction! {:?}", instr),
