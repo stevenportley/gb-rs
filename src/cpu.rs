@@ -1013,24 +1013,13 @@ impl Cpu {
                 op1: Some(Operands::HL),
                 op2: Some(Operands::R16(reg)),
             } => {
-                let before = self.rreg16(HL_REG);
-                let rreg = self.rreg16(reg);
-                let added = before.wrapping_add(rreg);
-                self.wreg16(HL_REG, added);
+                let hl_val = self.rreg16(HL_REG);
+                let reg_val = self.rreg16(reg);
+                let (new_val, overflow) = hl_val.overflowing_add(reg_val);
+                self.wreg16(HL_REG, new_val);
                 self.n_f = false;
-
-                if before < 0x8000 && ((before as u32 + rreg as u32) >= 0x8000) {
-                    // Overflow from bit 11 :(
-                    self.h_f = true;
-                } else {
-                    self.h_f = false;
-                }
-
-                if before > added {
-                    self.c_f = true;
-                } else {
-                    self.c_f = false;
-                }
+                self.h_f = does_bit11_overflow(hl_val, reg_val);
+                self.c_f = overflow;
                 return 2;
             }
             Instr {
@@ -1650,18 +1639,21 @@ impl Cpu {
                 op1: Some(Operands::HL),
                 op2: Some(Operands::SpImm8(i)),
             } => {
-                let new_sp = self.sp.wrapping_add(i as u16);
+
+                let sp = self.sp as i32;
+                let i_8 = i as i8;
+                let new_hl = (sp + i_8 as i32) as u16;
 
                 self.z_f = false;
                 self.n_f = false;
-                self.h_f = does_bit3_overflow(i, self.sp as u8);
+                self.h_f = does_bit3_overflow(i as u8, self.sp as u8);
 
-                // TODO(SP): This may be wrong
-                let (_, does_of) = (self.sp as u8).overflowing_add(self.sp as u8);
+                // Checking for signed byte add overflow
+                let (_, does_of) = (self.sp as u8).overflowing_add(i);
 
                 self.c_f = does_of;
-                self.sp = new_sp;
-
+                self.h = (new_hl >> 8) as u8;
+                self.l = (new_hl & 0xFF) as u8;
                 return 3;
             }
             Instr {

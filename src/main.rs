@@ -9,7 +9,7 @@ fn main() -> io::Result<()> {
     let args: Vec<String> = env::args().collect();
 
     let path = if args.len() != 2 {
-        Path::new("roms/testrom-cpuinstr-04.gb")
+        Path::new("roms/testrom-cpuinstr-03.gb")
     } else {
         Path::new(&args[1])
     };
