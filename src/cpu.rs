@@ -298,8 +298,9 @@ impl Cpu {
     fn rlc(&mut self, reg: u8) {
         let reg_val = self.rreg8(reg);
         let msb = reg_val >> 7;
+        let new_val = (reg_val << 1) | msb;
         self.c_f = msb == 1;
-        self.z_f = false;
+        self.z_f = new_val == 0;
         self.n_f = false;
         self.h_f = false;
         self.wreg8(reg, (reg_val << 1) | msb);
@@ -309,9 +310,10 @@ impl Cpu {
         let reg_val = self.rreg8(reg);
         let msb = reg_val >> 7;
         let new_lsb = if self.c_f { 1 } else { 0 };
+        let new_val = (reg_val << 1) | new_lsb;
 
-        self.wreg8(reg, (reg_val << 1) | new_lsb);
-        self.z_f = false;
+        self.wreg8(reg, new_val);
+        self.z_f = new_val == 0;
         self.n_f = false;
         self.h_f = false;
         self.c_f = msb == 1;
@@ -320,9 +322,10 @@ impl Cpu {
     fn rrc(&mut self, reg: u8) {
         let reg_val = self.rreg8(reg);
         let lsb = reg_val & 1;
+        let new_val = (reg_val >> 1) | (lsb << 7);
 
-        self.a = (reg_val >> 1) | (lsb << 7);
-        self.z_f = false;
+        self.wreg8(reg, new_val);
+        self.z_f = new_val == 0;
         self.n_f = false;
         self.h_f = false;
         self.c_f = lsb == 1;
@@ -331,9 +334,10 @@ impl Cpu {
     fn rr(&mut self, reg: u8) {
         let reg_val = self.rreg8(reg);
         let new_msb = if self.c_f { 0x80 } else { 0 };
+        let new_val = (reg_val >> 1) | new_msb;
 
-        self.wreg8(reg, (reg_val >> 1) | new_msb);
-        self.z_f = false;
+        self.wreg8(reg, new_val);
+        self.z_f = new_val == 0;
         self.n_f = false;
         self.h_f = false;
         self.c_f = (reg_val & 1) == 1;
@@ -738,25 +742,20 @@ impl Cpu {
             };
         }
 
-        if lower_three == 0x1 {
-            if bit43 == 0x1 {
-                return Instr {
-                    opcode: Opcode::RET,
-                    op1: None,
-                    op2: None,
-                };
-            } else if bit43 == 0x3 {
-                return Instr {
-                    opcode: Opcode::RETI,
-                    op1: None,
-                    op2: None,
-                };
-            } else {
-                unreachable!(
-                    "Block3 opcode decoding failed. Illegal opcode: {:#04x}",
-                    opcode
-                );
-            }
+        if opcode == 0xC9 {
+            return Instr {
+                opcode: Opcode::RET,
+                op1: None,
+                op2: None,
+            };
+        }
+
+        if opcode == 0xD9 {
+            return Instr {
+                opcode: Opcode::RETI,
+                op1: None,
+                op2: None,
+            };
         }
 
         if lower_three == 0x2 {
@@ -945,6 +944,10 @@ impl Cpu {
             self.bus.read(self.pc + 3));
     }
 
+    pub fn is_passed(&self) -> bool {
+        return self.bus.is_passed();
+    }
+
     pub fn execute_instr(&mut self, instr: Instr) -> usize {
         match instr {
             Instr {
@@ -1073,6 +1076,7 @@ impl Cpu {
                 op2: None,
             } => {
                 self.rlc(A_REG);
+                self.z_f = false;
                 return 1;
             }
             Instr {
@@ -1081,6 +1085,7 @@ impl Cpu {
                 op2: None,
             } => {
                 self.rrc(A_REG);
+                self.z_f = false;
                 return 1;
             }
             Instr {
@@ -1089,6 +1094,7 @@ impl Cpu {
                 op2: None,
             } => {
                 self.rl(A_REG);
+                self.z_f = false;
                 return 1;
             }
             Instr {
@@ -1097,6 +1103,7 @@ impl Cpu {
                 op2: None,
             } => {
                 self.rr(A_REG);
+                self.z_f = false;
                 return 1;
             }
             Instr {
@@ -1333,19 +1340,22 @@ impl Cpu {
                 self.n_f = false;
                 self.h_f = does_bit3_overflow(self.a, i);
 
-                let (added, overflow) = i.overflowing_add(self.a);
-                self.c_f = overflow;
+                let (added, overflow) = self.a.overflowing_add(i);
 
-                // Next two conditionals check if the add with carry will overflow
-                if added == 0xF {
-                    self.h_f = true;
+                if self.c_f {
+                    // Next two conditionals check if the carry will overflow
+                    if does_bit3_overflow(added, 1) {
+                        self.h_f = true;
+                    }
+
+                    self.c_f = overflow || added == 0xFF;
+                    self.a = added.wrapping_add(1);
+                } else {
+                    self.c_f = overflow;
+                    self.a = added;
                 }
 
-                if added == 0xFF {
-                    self.c_f = true;
-                }
-
-                self.a = self.a.wrapping_add(1);
+                self.z_f = self.a == 0;
                 return 2;
             }
             Instr {
@@ -1452,14 +1462,14 @@ impl Cpu {
                 op1: None,
                 op2: None,
             } => {
-                todo!("Instruction not implemented")
+                todo!("Instruction not implemented: {:?}", instr);
             }
             Instr {
                 opcode: Opcode::JP,
                 op1: Some(Operands::Cond(cond)),
                 op2: Some(Operands::Imm16(i)),
             } => {
-                todo!("Instruction not implemented")
+                todo!("Instruction not implemented: {:?}", instr);
             }
             Instr {
                 opcode: Opcode::JP,
@@ -1474,7 +1484,9 @@ impl Cpu {
                 op1: Some(Operands::HL),
                 op2: None,
             } => {
-                todo!("Instruction not implemented");
+                let hl = ((self.h as u16) << 8) | self.l as u16;
+                self.pc = hl;
+                return 1;
             }
             Instr {
                 opcode: Opcode::CALL,
@@ -1770,6 +1782,41 @@ impl Cpu {
                 self.n_f = false;
                 self.h_f = false;
                 self.c_f = (reg_val & 0x1) == 0x1;
+                return if r == HL_REG { 4 } else { 2 };
+            }
+            Instr {
+                opcode: Opcode::BIT,
+                op1: Some(Operands::B3(b3)),
+                op2: Some(Operands::R8(r)),
+            } => {
+                let reg_val = self.rreg8(r);
+                let mask = 0x1 << b3;
+                
+                self.z_f = (reg_val & mask) == 0;
+                self.n_f = false;
+                self.h_f = true;
+                return if r == HL_REG { 4 } else { 2 };
+            }
+            Instr {
+                opcode: Opcode::RES,
+                op1: Some(Operands::B3(b3)),
+                op2: Some(Operands::R8(r)),
+            } => {
+                let reg_val = self.rreg8(r);
+                let mask = 0x1 << b3;
+                let new_val = reg_val & !mask;
+                self.wreg8(r, new_val);
+                return if r == HL_REG { 4 } else { 2 };
+            }
+            Instr {
+                opcode: Opcode::SET,
+                op1: Some(Operands::B3(b3)),
+                op2: Some(Operands::R8(r)),
+            } => {
+                let reg_val = self.rreg8(r);
+                let mask = 0x1 << b3;
+                let new_val = reg_val | mask;
+                self.wreg8(r, new_val);
                 return if r == HL_REG { 4 } else { 2 };
             }
 

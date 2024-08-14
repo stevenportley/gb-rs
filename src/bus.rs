@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::io;
 
 pub struct Bus {
@@ -11,6 +12,7 @@ pub struct Bus {
     io: [u8; 0x80],
     hram: [u8; 0x7F],
     ie_reg: u8,
+    passed_buf: VecDeque<u8>,
 }
 
 impl Bus {
@@ -26,6 +28,7 @@ impl Bus {
             io: [0; 0x80],
             hram: [0; 0x7F],
             ie_reg: 0,
+            passed_buf: VecDeque::new(),
         };
 
         rom.read_exact(&mut bus.rom)?;
@@ -64,6 +67,13 @@ impl Bus {
             }
             0xFF00..=0xFF7F => {
                 self.io[addr as usize - 0xFF00] = val;
+                if addr == 0xFF01 {
+                    self.passed_buf.push_back(val);
+                    if self.passed_buf.len() > 6 {
+                        self.passed_buf.pop_front();
+                    }
+                    self.passed_buf.make_contiguous();
+                }
             }
             0xFF80..=0xFFFe => {
                 self.hram[addr as usize - 0xFF80] = val;
@@ -113,5 +123,11 @@ impl Bus {
                 return self.ie_reg;
             }
         }
+    }
+
+    pub fn is_passed(&self) -> bool {
+        let (sl,_) = self.passed_buf.as_slices();
+        let str = std::str::from_utf8(sl).expect("No!");
+        return str == "Passed";
     }
 }

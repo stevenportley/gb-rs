@@ -26,6 +26,10 @@ fn main() -> io::Result<()> {
             break;
         }
 
+        if cpu.is_passed() {
+            break;
+        }
+
     }
 
     Ok(())
