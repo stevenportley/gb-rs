@@ -245,7 +245,7 @@ impl Cpu {
                 self.l = (hl & 0xFF) as u8;
                 return ret;
             }
-            4 => {
+            3 => {
                 let mut hl = make_u16(self.h, self.l);
                 let ret = self.bus.read(hl);
                 hl = hl.wrapping_sub(1);
@@ -759,10 +759,11 @@ impl Cpu {
         }
 
         if lower_three == 0x2 {
+            let next_word = self.load_word();
             return Instr {
                 opcode: Opcode::JP,
                 op1: Some(Operands::Cond(bit43)),
-                op2: None,
+                op2: Some(Operands::Imm16(next_word)),
             };
         }
 
@@ -1101,7 +1102,33 @@ impl Cpu {
                 op2: None,
             } => {
                 //https://forums.nesdev.org/viewtopic.php?t=15944
-                unreachable!("DAA isn't implemented :(");
+
+                /*
+                       if (!n_flag) {  // after an addition, adjust if (half-)carry occurred or if result is out of bounds
+                  if (c_flag || a > 0x99) { a += 0x60; c_flag = 1; }
+                  if (h_flag || (a & 0x0f) > 0x09) { a += 0x6; }
+                } else {  // after a subtraction, only adjust if (half-)carry occurred
+                  if (c_flag) { a -= 0x60; }
+                  if (h_flag) { a -= 0x6; }
+                }
+                // these flags are always updated
+                z_flag = (a == 0); // the usual z flag
+                h_flag = 0; // h flag is always cleared
+
+                                 *
+                                 */
+                if self.n_f {
+                    if self.c_f { self.a = self.a.wrapping_sub(0x60); }
+                    if self.h_f { self.a = self.a.wrapping_sub(0x6); }
+                } else {
+                    if self.c_f || self.a > 0x99 { self.a = self.a.wrapping_add(0x60); self.c_f = true; }
+                    if self.h_f || (self.a & 0x0f) > 0x09 { self.a = self.a + 0x6; }
+                }
+
+                self.z_f = self.a == 0;
+                self.h_f = false;
+
+                return 1;
             }
             Instr {
                 opcode: Opcode::CPL,
@@ -1192,7 +1219,7 @@ impl Cpu {
 
                 self.h_f = does_bit3_overflow(reg_val, self.a);
 
-                let (new_val, does_overflow) = reg_val.overflowing_add(reg_val);
+                let (new_val, does_overflow) = self.a.overflowing_add(reg_val);
                 self.c_f = does_overflow;
                 self.z_f = new_val == 0;
                 self.n_f = false;
@@ -1204,24 +1231,27 @@ impl Cpu {
                 op1: Some(Operands::A),
                 op2: Some(Operands::R8(r)),
             } => {
-                self.n_f = false;
-
                 let reg_val = self.rreg8(r);
+
+                self.n_f = false;
                 self.h_f = does_bit3_overflow(self.a, reg_val);
 
                 let (added, overflow) = reg_val.overflowing_add(self.a);
-                self.c_f = overflow;
 
-                // Next two conditionals check if the add with carry will overflow
-                if added == 0xF {
-                    self.h_f = true;
+                if self.c_f {
+                    // Next two conditionals check if the carry will overflow
+                    if does_bit3_overflow(added, 1) {
+                        self.h_f = true;
+                    }
+
+                    self.c_f = overflow || added == 0xFF;
+                    self.a = added.wrapping_add(1);
+                } else {
+                    self.c_f = overflow;
+                    self.a = added;
                 }
 
-                if added == 0xFF {
-                    self.c_f = true;
-                }
-
-                self.a = self.a.wrapping_add(1);
+                self.z_f = self.a == 0;
                 return 1;
             }
             Instr {
@@ -1248,11 +1278,18 @@ impl Cpu {
                 let carry = if self.c_f { 1 } else { 0 };
                 let reg_val = self.rreg8(r);
 
-                self.c_f = (reg_val + carry) > self.a;
-                self.h_f = does_bit3_borrow(self.a, reg_val + carry);
+                self.c_f = (reg_val as u16 + carry as u16) > self.a as u16;
+
+                self.h_f = does_bit3_borrow(self.a, reg_val);
 
                 self.n_f = true;
-                self.a = self.a.wrapping_sub(reg_val + 1);
+                self.a = self.a.wrapping_sub(reg_val);
+
+                if does_bit3_borrow(self.a, carry) {
+                    self.h_f = true;
+                }
+
+                self.a = self.a.wrapping_sub(carry);
                 self.z_f = self.a == 0;
                 return 1;
             }
@@ -1301,7 +1338,7 @@ impl Cpu {
 
                 self.h_f = does_bit3_borrow(self.a, reg_val);
                 self.c_f = reg_val > self.a;
-                self.n_f = false;
+                self.n_f = true;
                 let new_val = self.a.wrapping_sub(reg_val);
                 self.z_f = new_val == 0;
 
@@ -1369,11 +1406,18 @@ impl Cpu {
             } => {
                 let carry = if self.c_f { 1 } else { 0 };
 
-                self.c_f = i + carry > self.a;
-                self.h_f = does_bit3_borrow(self.a, i + carry);
+                self.c_f = (i as u16 + carry as u16) > self.a as u16;
+
+                self.h_f = does_bit3_borrow(self.a, i);
 
                 self.n_f = true;
-                self.a = self.a.wrapping_sub(i + carry);
+                self.a = self.a.wrapping_sub(i);
+
+                if does_bit3_borrow(self.a, carry) {
+                    self.h_f = true;
+                }
+
+                self.a = self.a.wrapping_sub(carry);
                 self.z_f = self.a == 0;
                 return 2;
             }
@@ -1451,14 +1495,21 @@ impl Cpu {
                 op1: None,
                 op2: None,
             } => {
-                todo!("Instruction not implemented: {:?}", instr);
+                self.ime = true;
+                self.pc = self.pop_stack();
+                return 4;
             }
             Instr {
                 opcode: Opcode::JP,
                 op1: Some(Operands::Cond(cond)),
                 op2: Some(Operands::Imm16(i)),
             } => {
-                todo!("Instruction not implemented: {:?}", instr);
+                if self.check_cond(cond) {
+                    self.pc = i;
+                    return 4;
+                }
+
+                return 3;
             }
             Instr {
                 opcode: Opcode::JP,
@@ -1504,7 +1555,9 @@ impl Cpu {
                 op1: Some(Operands::Tgt3(tgt)),
                 op2: None,
             } => {
-                todo!("Instruction not implemented");
+                self.push_stack(self.pc);
+                self.pc = (tgt as u16) << 3;
+                return 4;
             }
             Instr {
                 opcode: Opcode::POP,
@@ -1566,15 +1619,13 @@ impl Cpu {
                 self.push_stack(val);
                 return 4;
             }
-            /*
-             * TODO(SP): Add 0xCB prefix instructions here!
-             */
             Instr {
                 opcode: Opcode::LDH,
                 op1: Some(Operands::R8(C_REG)),
                 op2: Some(Operands::A),
             } => {
-                todo!("Instruction not implemented");
+                self.bus.write(PAGE0_OFFSET + self.c as u16, self.a);
+                return 2;
             }
             Instr {
                 opcode: Opcode::LDH,
@@ -1639,7 +1690,6 @@ impl Cpu {
                 op1: Some(Operands::HL),
                 op2: Some(Operands::SpImm8(i)),
             } => {
-
                 let sp = self.sp as i32;
                 let i_8 = i as i8;
                 let new_hl = (sp + i_8 as i32) as u16;
@@ -1783,7 +1833,7 @@ impl Cpu {
             } => {
                 let reg_val = self.rreg8(r);
                 let mask = 0x1 << b3;
-                
+
                 self.z_f = (reg_val & mask) == 0;
                 self.n_f = false;
                 self.h_f = true;
@@ -1820,79 +1870,75 @@ impl Cpu {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs::read;
+    use std::path::Path;
+    use std::time;
 
-    #[test]
-    fn ld_decode() {
-        // Instr taken from: https://github.com/retrio/gb-test-roms/blob/master/cpu_instrs/source/04-op%20r%2Cimm.s
-        let program = [
-            0x36, 0x00, 0x06, 0x00, 0x0E, 0x00, 0x16, 0x00, 0x1E, 0x00, 0x26, 0x00, 0x2E, 0x00,
-            0x3E, 0x00, 0xF6, 0x00, 0xFE, 0x00, 0xC6, 0x00, 0xCE, 0x00, 0xD6, 0x00, 0xDE, 0x00,
-            0xE6, 0x00, 0xEE, 0x00,
-        ];
+    fn rom_test(rom_path: &Path) {
+        let rom = read(rom_path).expect("Unable to load test rom: {rom_path}");
 
-        let mut cpu = Cpu::new();
-        //cpu.memory[0..32].copy_from_slice(&program);
+        let mut cpu = Cpu::new(rom.as_slice()).expect("Unable to load test rom");
 
-        for _ in 0..16 {
+        let timeout = time::Instant::now() + time::Duration::from_secs(5);
+
+        let mut cnt = 0;
+
+        while !cpu.is_passed() {
             let next_instr = cpu.next_instr();
-            /*
-            println!(
-                "{:?} {:?} {:?}",
-                next_instr.opcode, next_instr.op1, next_instr.op2
-            );
-            */
-
             let _clks = cpu.execute_instr(next_instr);
+
+            if cnt == 1000 {
+                // Timeout check
+                assert!(time::Instant::now() < timeout);
+                cnt = 0;
+            }
+
+            cnt += 1;
         }
     }
 
     #[test]
-    fn basic_prog() {
-        let program = [0x06, 0xaa, 0x0e, 0x55, 0x3e, 0x00, 0xb0, 0xb1, 0x3c, 0x10];
+    fn rom3_op_sp_hl() {
+        rom_test(Path::new("roms/testrom-cpuinstr-03.gb"));
+    }
 
-        let mut cpu = Cpu::new();
-        //cpu.memory[0..program.len()].copy_from_slice(&program);
+    #[test]
+    fn rom4_op_r_imm() {
+        rom_test(Path::new("roms/testrom-cpuinstr-04.gb"));
+    }
 
-        // ld b, $AA
-        // ld c, $55
-        // ld a, $0
-        // or a, b
-        // or a, c
-        // inc a
-        // stop
+    #[test]
+    fn rom5_op_rp() {
+        rom_test(Path::new("roms/testrom-cpuinstr-05.gb"));
+    }
 
-        let exp_instrs = [
-            Opcode::LD,
-            Opcode::LD,
-            Opcode::LD,
-            Opcode::OR,
-            Opcode::OR,
-            Opcode::INC,
-            Opcode::STOP,
-        ];
+    #[test]
+    fn rom6_ld_r_r() {
+        rom_test(Path::new("roms/testrom-cpuinstr-06.gb"));
+    }
 
-        for exp_instr in exp_instrs {
-            let next_instr = cpu.next_instr();
-            /*
+    #[test]
+    fn rom7_jr_jp_call_ret_rst() {
+        rom_test(Path::new("roms/testrom-cpuinstr-07.gb"));
+    }
 
-                        println!(
-                            "{:?} {:?} {:?}",
-                            next_instr.opcode, next_instr.op1, next_instr.op2
-                        );
-                        println!(
-                            "A: {:X} B: {:X} C: {:X}",
-                            cpu.a, cpu.b, cpu.c
-                        );
+    #[test]
+    fn rom8_misc_instr() {
+        rom_test(Path::new("roms/testrom-cpuinstr-08.gb"));
+    }
 
-            */
+    #[test]
+    fn rom9_op_r_r() {
+        rom_test(Path::new("roms/testrom-cpuinstr-09.gb"));
+    }
 
-            cpu.log_state();
+    #[test]
+    fn rom10_op_r_r() {
+        rom_test(Path::new("roms/testrom-cpuinstr-10.gb"));
+    }
 
-            assert_eq!(exp_instr, next_instr.opcode);
-            let clks = cpu.execute_instr(next_instr);
-            if clks == 0 {
-                break;
-            }
-        }
+    #[test]
+    fn rom11_op_a_hl() {
+        rom_test(Path::new("roms/testrom-cpuinstr-11.gb"));
     }
 }
