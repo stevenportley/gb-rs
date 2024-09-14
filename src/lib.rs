@@ -1,5 +1,7 @@
 pub mod cpu;
 pub mod bus;
+pub mod ppu;
+pub mod tile;
 
 pub fn add(left: usize, right: usize) -> usize {
     left + right

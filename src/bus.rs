@@ -1,10 +1,12 @@
 use std::collections::VecDeque;
 use std::io;
 
+use crate::ppu::PPU;
+
 pub struct Bus {
     rom: [u8; 0x4000],
     mapped_rom: [u8; 0x4000], //TODO(SP): This needs to be changed to support ROM bank mapper
-    vram: [u8; 0x2000],
+    pub ppu: PPU,
     eram: [u8; 0x2000],
     wram: [u8; 0x1000],
     mapped_wram: [u8; 0x1000],
@@ -20,7 +22,7 @@ impl Bus {
         let mut bus = Self {
             rom: [0; 0x4000],
             mapped_rom: [0; 0x4000],
-            vram: [0; 0x2000],
+            ppu: PPU::new(),
             eram: [0; 0x2000],
             wram: [0; 0x1000],
             mapped_wram: [0; 0x1000],
@@ -45,7 +47,7 @@ impl Bus {
                 self.mapped_rom[addr as usize - 0x4000] = val;
             }
             0x8000..=0x9FFF => {
-                self.vram[addr as usize - 0x8000] = val;
+                self.ppu.vram[addr as usize - 0x8000] = val;
             }
             0xA000..=0xBFFF => {
                 self.eram[addr as usize - 0xA000] = val;
@@ -93,7 +95,7 @@ impl Bus {
                 return self.mapped_rom[addr as usize - 0x4000];
             }
             0x8000..=0x9FFF => {
-                return self.vram[addr as usize - 0x8000];
+                return self.ppu.vram[addr as usize - 0x8000];
             }
             0xA000..=0xBFFF => {
                 return self.eram[addr as usize - 0xA000];
