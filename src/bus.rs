@@ -10,7 +10,6 @@ pub struct Bus {
     eram: [u8; 0x2000],
     wram: [u8; 0x1000],
     mapped_wram: [u8; 0x1000],
-    oam: [u8; 0xA0],
     io: [u8; 0x80],
     hram: [u8; 0x7F],
     ie_reg: u8,
@@ -26,7 +25,6 @@ impl Bus {
             eram: [0; 0x2000],
             wram: [0; 0x1000],
             mapped_wram: [0; 0x1000],
-            oam: [0; 0xA0],
             io: [0; 0x80],
             hram: [0; 0x7F],
             ie_reg: 0,
@@ -62,7 +60,7 @@ impl Bus {
                 unreachable!("Attempting to write to echo ram! {addr}, {val}");
             }
             0xFE00..=0xFE9F => {
-                self.oam[addr as usize - 0xFE00] = val;
+                self.ppu.oam[addr as usize - 0xFE00] = val;
             }
             0xFEA0..=0xFEFF => {
                 unreachable!("Attempting to write to echo ram! {addr}, {val}");
@@ -110,7 +108,7 @@ impl Bus {
                 unreachable!("Attempting to read from echo ram! {addr}");
             }
             0xFE00..=0xFE9F => {
-                return self.oam[addr as usize - 0xFE00];
+                return self.ppu.oam[addr as usize - 0xFE00];
             }
             0xFEA0..=0xFEFF => {
                 unreachable!("Attempting to read from echo ram! {addr}");

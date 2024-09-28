@@ -2,8 +2,12 @@ use gb_rs::cpu::Cpu;
 use std::env;
 use std::io;
 
-const WIDTH: u32 = 160;
-const HEIGHT: u32 = 144;
+
+const HORIZ_TILES: usize = 32;
+const VERT_TILES: usize = 32;
+
+const WIDTH: u32 = (HORIZ_TILES * 8) as u32;
+const HEIGHT: u32 = (VERT_TILES * 8) as u32;
 
 use pixels::{Pixels, SurfaceTexture};
 use winit::dpi::LogicalSize;
@@ -45,19 +49,13 @@ fn main() -> io::Result<()> {
 }
 
 fn gui() {
-    let test_dump = Path::new("roms/bgbtest.dump");
+    let test_dump = Path::new("roms/pokemon_red.dump");
     let rom = std::fs::read(test_dump).expect("Unable to load test rom: {rom_path}");
-    let mut ppu = gb_rs::ppu::PPU {
-        vram: [0; 0x2000],
-    };
+    let mut ppu = gb_rs::ppu::PPU::new();
 
-    ppu.vram[0..6144].copy_from_slice(&rom);
+    ppu.vram.copy_from_slice(&rom);
 
-    let vram_dump = ppu.dump_vram();
-
-    for tile in &vram_dump {
-        println!("{:?}", tile);
-    }
+    //let vram_dump = ppu.dump_vram();
 
     let event_loop = EventLoop::new();
     let mut input = WinitInputHelper::new();
@@ -77,48 +75,23 @@ fn gui() {
         Pixels::new(WIDTH, HEIGHT, surface_texture).expect("Failed to make new pixels??")
     };
 
-    let def_tile = gb_rs::tile::Tile { pixels: [[0; 8]; 8] };
-    let mut tilemap  = gb_rs::tile::TileMap { tiles: [def_tile; 384] };
-    tilemap.tiles.copy_from_slice(&vram_dump[0..384]);
-    
-
 
     event_loop.run(move |event, _, control_flow| {
-        let mut pixel_cnt = 0;
-        let mut tile_cnt = 0;
+        let background = ppu.get_background();
+        //let background = ppu.dump_vram();
 
-        let mut line_index = 0;
-        let mut line_iter = gb_rs::tile::LineIter::from_tilemap(&tilemap, line_index);
 
         // Draw the current frame
         if let Event::RedrawRequested(_) = event {
-            for (i, pixel) in pixels.frame_mut().chunks_exact_mut(4).enumerate() {
 
-                let a = match line_iter.next() {
-                    None => { 
-                        line_index += 1;
-                        /*
-                        if line_index >= 100 {
-                            line_index = 0;
-                        }
-                        */
-                        line_iter = gb_rs::tile::LineIter::from_tilemap(&tilemap, line_index);
-                        line_iter.next().unwrap()
+            let mut tile_renderer = gb_rs::tile::TileRenderer::from_tiles(&background, WIDTH as usize);
+
+            for (_, eight_pixels) in pixels.frame_mut().chunks_exact_mut(4 * 8).enumerate() {
+
+                if let Some(new_pixels) = tile_renderer.next() {
+                    for i in 0..8 {
+                        eight_pixels[(4*i)..((4*i)+4)].copy_from_slice(&gb_rs::ppu::PPU::palette_to_rgba(new_pixels[i]));
                     }
-                    Some(b) => { b }
-                };
-
-                //let a = vram_dump[tile_cnt].pixels[pixel_cnt / 8][pixel_cnt % 8];
-                let val = 255 - (85 * a);
-
-                let rgba = [val, val, val, 0xff];
-                //let rgba = [255 , 255 , 255 , 0xff];
-                //println!("A: {:?}", vram_dump[tile_cnt]);
-                pixel.copy_from_slice(&rgba);
-                pixel_cnt += 1;
-                if pixel_cnt > 63 {
-                    pixel_cnt = 0;
-                    tile_cnt += 1;
                 }
             }
 

@@ -1,17 +1,95 @@
 
-const TILE_LEN: usize = 8;
-
-// 2 bytes produces 2 lines, 8 lines
-pub const NTILES: usize = 384;
-
-pub const VERT_TILES: usize = 18;
-pub const HORIZ_TILES: usize = 20;
-
-#[derive(Debug, Clone, Copy)]
-pub struct Tile {
-    pub pixels: [[u8; TILE_LEN]; TILE_LEN],
+pub struct Tile<'a> {
+    data: &'a [u8],
 }
 
+impl<'a> Tile<'a> {
+    pub fn from_bytes(data: &'a [u8]) -> Self {
+        assert_eq!(data.len(), 16);
+        Self { data }
+    }
+
+    pub fn pixel_buf(&self, line_idx: u8) -> [u8; 8] {
+        assert!(line_idx < 8);
+
+        let make_line = |b1: u8, b2: u8| -> [u8; 8] {
+            let mut line = [0; 8];
+
+            for i in 0..7 {
+                // B1 is 64, B2 is 128
+                line[i] = line[i] + if ((b1 << i) & 0x80) == 0x80 { 1 } else { 0 };
+                line[i] = line[i] + if ((b2 << i) & 0x80) == 0x80 { 2 } else { 0 };
+            }
+            line
+        };
+
+        make_line(self.data[(line_idx * 2) as usize], self.data[((line_idx * 2) + 1) as usize])
+    }
+}
+
+pub struct TileRenderer<'a> {
+    tiles: &'a [Tile<'a>],
+    image_width: usize,
+    tile_cnt : usize,
+    line_idx : usize,
+}
+
+impl<'a> TileRenderer<'a> {
+
+    pub fn from_tiles(tiles: &'a [Tile<'_>], image_width: usize) -> Self {
+        assert_eq!(image_width % 8, 0);
+        Self {
+            tiles,
+            image_width,
+            tile_cnt: 0,
+            line_idx: 0,
+        }
+    }
+
+}
+
+impl<'a> Iterator for TileRenderer<'a> { 
+    type Item = [u8; 8];
+
+    fn next(&mut self) -> Option<Self::Item> {
+
+        // The number of tiles in a horizontal line
+        let num_tiles_in_line = self.image_width / 8;
+
+        // The tile offset corresponding to the begining of this line
+        let y_tile_offset = (self.line_idx / 8) * num_tiles_in_line;
+
+        // The horizonal tile offset 
+        let x_tile_offset = self.tile_cnt;
+
+        let this_tile = y_tile_offset + x_tile_offset;
+
+        if this_tile == self.tiles.len() {
+            return None;
+        }
+
+        // vertical offset inside the tile
+        // e.g. if we are drawing line 10, this should be 2
+        // since we are drawing the third line inside the tile
+        let vert_line_tile_offset : u8 = (self.line_idx % 8).try_into().unwrap();
+
+        let pixel_indices = self.tiles[this_tile].pixel_buf(vert_line_tile_offset);
+
+        if self.tile_cnt == num_tiles_in_line - 1 {
+            self.line_idx += 1;
+            self.tile_cnt = 0;
+        } else {
+            self.tile_cnt += 1
+        }
+
+        Some(pixel_indices)
+    }
+
+}
+
+
+
+/*
 pub struct TileMap {
     pub tiles: [Tile; NTILES],
 }
@@ -32,6 +110,7 @@ impl<'a> LineIter<'a> {
     }
 }
 
+impl Iterator for LineIter<'_> { 
 impl Iterator for LineIter<'_> { 
     type Item = u8;
     fn next(&mut self) -> Option<Self::Item> {
@@ -88,4 +167,29 @@ impl Tile {
 
 fn tile_to_pixel_idx(x : usize, y : usize) -> (usize, usize) {
     (x * 8, y * 8)
+}
+*/
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn base_test() {
+        let raw = [
+            0x7C, 0x7C, 0x00, 0xC6, 0xC6, 0x00, 0x00, 0xFE, 0xC6, 0xC6, 0x00, 0xC6, 0xC6, 0x00,
+            0x00, 0x00,
+        ];
+
+        let tile = Tile::from_bytes(&raw);
+        assert_eq!(tile.pixel_buf(0), [0, 3, 3, 3, 3, 3, 0, 0]);
+        assert_eq!(tile.pixel_buf(1), [2, 2, 0, 0, 0, 2, 2, 0]);
+        assert_eq!(tile.pixel_buf(2), [1, 1, 0, 0, 0, 1, 1, 0]);
+        assert_eq!(tile.pixel_buf(3), [2, 2, 2, 2, 2, 2, 2, 0]);
+        assert_eq!(tile.pixel_buf(4), [3, 3, 0, 0, 0, 3, 3, 0]);
+        assert_eq!(tile.pixel_buf(5), [2, 2, 0, 0, 0, 2, 2, 0]);
+        assert_eq!(tile.pixel_buf(6), [1, 1, 0, 0, 0, 1, 1, 0]);
+        assert_eq!(tile.pixel_buf(7), [0, 0, 0, 0, 0, 0, 0, 0]);
+    }
+    
 }
