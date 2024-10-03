@@ -22,7 +22,8 @@ fn main() -> io::Result<()> {
     let args: Vec<String> = env::args().collect();
 
     let path = if args.len() != 2 {
-        Path::new("roms/testrom-cpuinstr-05.gb")
+        Path::new("roms/tetris.gb")
+        //Path::new("roms/testrom-cpuinstr-04.gb")
     } else {
         Path::new(&args[1])
     };
@@ -30,6 +31,7 @@ fn main() -> io::Result<()> {
     let rom = std::fs::read(path).expect("Unable to load rom file");
     let mut cpu = Cpu::new(rom.as_slice())?;
 
+    /*
     loop {
         //cpu.log_state();
         let next_instr = cpu.next_instr();
@@ -42,20 +44,22 @@ fn main() -> io::Result<()> {
             break;
         }
     }
+    */
 
-    gui();
+    gui(cpu);
 
     Ok(())
 }
 
-fn gui() {
-    let test_dump = Path::new("roms/pokemon_red.dump");
+fn gui(mut gb: Cpu) {
+    let test_dump = Path::new("roms/testris_vram.dump");
+
     let rom = std::fs::read(test_dump).expect("Unable to load test rom: {rom_path}");
+    /*
     let mut ppu = gb_rs::ppu::PPU::new();
 
-    ppu.vram.copy_from_slice(&rom);
-
-    //let vram_dump = ppu.dump_vram();
+    ppu.VRAM.copy_from_slice(&rom);
+    */
 
     let event_loop = EventLoop::new();
     let mut input = WinitInputHelper::new();
@@ -76,10 +80,16 @@ fn gui() {
     };
 
 
+
     event_loop.run(move |event, _, control_flow| {
-        let background = ppu.get_background();
+        //let background = ppu.get_background();
         //let background = ppu.dump_vram();
 
+        for _ in 0..1000 {
+            gb.run_one();
+        }
+
+        let background = gb.bus.ppu.get_background();
 
         // Draw the current frame
         if let Event::RedrawRequested(_) = event {

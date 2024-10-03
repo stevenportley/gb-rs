@@ -1,4 +1,4 @@
-use crate::bus::Bus;
+use crate::{bus::Bus, interrupts::IntSource};
 use std::io;
 
 fn does_bit3_overflow(a: u8, b: u8) -> bool {
@@ -39,6 +39,7 @@ pub struct Cpu {
 
     ime: bool,
 
+    sleep: bool,
     pub bus: Bus,
 }
 
@@ -140,6 +141,7 @@ impl Cpu {
             n_f: false,
             z_f: true,
             ime: false,
+            sleep: false,
             bus: Bus::new(rom)?,
         };
 
@@ -1122,7 +1124,7 @@ impl Cpu {
                     if self.h_f { self.a = self.a.wrapping_sub(0x6); }
                 } else {
                     if self.c_f || self.a > 0x99 { self.a = self.a.wrapping_add(0x60); self.c_f = true; }
-                    if self.h_f || (self.a & 0x0f) > 0x09 { self.a = self.a + 0x6; }
+                    if self.h_f || (self.a & 0x0f) > 0x09 { self.a = self.a.wrapping_add(0x6); }
                 }
 
                 self.z_f = self.a == 0;
@@ -1181,6 +1183,7 @@ impl Cpu {
                     let offset = i as i8;
                     let curr_pc = self.pc as i32;
                     let new_pc = curr_pc + offset as i32;
+            
                     self.pc = new_pc as u16;
                     return 3;
                 }
@@ -1192,6 +1195,7 @@ impl Cpu {
                 op1: None,
                 op2: None,
             } => {
+                println!("Stop instruction not implemented!");
                 return 0;
             }
             Instr {
@@ -1208,7 +1212,20 @@ impl Cpu {
                 op1: None,
                 op2: None,
             } => {
-                todo!("HALT not implemented yet :(");
+                if self.ime {
+                    self.sleep = true;
+                    return 1;
+                }
+
+                if !self.bus.int_controller.pending() {
+                    self.sleep = true;
+                    return 1;
+                }
+                
+                //HALT BUG!
+                assert!(false);
+
+                return 1;
             }
             Instr {
                 opcode: Opcode::ADD,
@@ -1865,6 +1882,50 @@ impl Cpu {
             _ => unreachable!("Unhandle instruction! {:?}", instr),
         }
     }
+
+    pub fn run_one(&mut self) {
+
+        // If we are halted waiting for next interrupt,
+        // keep the timer running
+        if self.sleep {
+            while !self.bus.int_controller.pending() {
+                self.bus.ppu.tick();
+                if self.bus.timer.tick() {
+                    self.bus.int_controller.interrupt(IntSource::TIMER);
+                }
+            }
+
+            self.sleep = false;
+            return;
+        }
+
+        let mut clks = 0;
+
+        if self.ime {
+            if let Some(interrupt) = self.bus.int_controller.next() {
+                clks += self.handle_interrupt(interrupt);
+            }
+        }
+        
+
+        let next_instr = self.next_instr();
+        clks += self.execute_instr(next_instr);
+        for _ in 0..clks {
+            self.bus.ppu.tick();
+            if self.bus.timer.tick() {
+                self.bus.int_controller.interrupt(IntSource::TIMER);
+            }
+        }
+    }
+
+
+    pub fn handle_interrupt(&mut self, int_source: IntSource) -> usize {
+        self.ime = false;
+        self.push_stack(self.pc);
+        self.pc = 0x50;
+        self.bus.int_controller.interrupt_clear(int_source);
+        return 5;
+    }
 }
 
 #[cfg(test)]
@@ -1884,8 +1945,7 @@ mod tests {
         let mut cnt = 0;
 
         while !cpu.is_passed() {
-            let next_instr = cpu.next_instr();
-            let _clks = cpu.execute_instr(next_instr);
+            cpu.run_one();
 
             if cnt == 1000 {
                 // Timeout check
@@ -1895,6 +1955,16 @@ mod tests {
 
             cnt += 1;
         }
+    }
+
+    #[test]
+    fn rom1_special() {
+        rom_test(Path::new("roms/testrom-cpuinstr-01.gb"));
+    }
+
+    #[test]
+    fn rom2_int() {
+        rom_test(Path::new("roms/testrom-cpuinstr-02.gb"));
     }
 
     #[test]

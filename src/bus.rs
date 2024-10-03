@@ -1,7 +1,9 @@
 use std::collections::VecDeque;
 use std::io;
 
+use crate::interrupts::InterruptController;
 use crate::ppu::PPU;
+use crate::timer::Timer;
 
 pub struct Bus {
     rom: [u8; 0x4000],
@@ -10,9 +12,10 @@ pub struct Bus {
     eram: [u8; 0x2000],
     wram: [u8; 0x1000],
     mapped_wram: [u8; 0x1000],
+    pub timer: Timer,
+    pub int_controller: InterruptController,
     io: [u8; 0x80],
     hram: [u8; 0x7F],
-    ie_reg: u8,
     passed_buf: VecDeque<u8>,
 }
 
@@ -25,9 +28,10 @@ impl Bus {
             eram: [0; 0x2000],
             wram: [0; 0x1000],
             mapped_wram: [0; 0x1000],
+            timer: Timer::new(),
+            int_controller: InterruptController::new(),
             io: [0; 0x80],
             hram: [0; 0x7F],
-            ie_reg: 0,
             passed_buf: VecDeque::new(),
         };
 
@@ -45,7 +49,7 @@ impl Bus {
                 self.mapped_rom[addr as usize - 0x4000] = val;
             }
             0x8000..=0x9FFF => {
-                self.ppu.vram[addr as usize - 0x8000] = val;
+                self.ppu.write(addr, val);
             }
             0xA000..=0xBFFF => {
                 self.eram[addr as usize - 0xA000] = val;
@@ -60,12 +64,13 @@ impl Bus {
                 unreachable!("Attempting to write to echo ram! {addr}, {val}");
             }
             0xFE00..=0xFE9F => {
-                self.ppu.oam[addr as usize - 0xFE00] = val;
+                //OAM
+                self.ppu.write(addr, val);
             }
             0xFEA0..=0xFEFF => {
-                unreachable!("Attempting to write to echo ram! {addr}, {val}");
+                //println!("Attempting to write to prohibited area! {addr}, {val}");
             }
-            0xFF00..=0xFF7F => {
+            0xFF00..=0xFF03 => {
                 self.io[addr as usize - 0xFF00] = val;
                 if addr == 0xFF01 {
                     self.passed_buf.push_back(val);
@@ -75,11 +80,30 @@ impl Bus {
                     self.passed_buf.make_contiguous();
                 }
             }
+            0xFF04..=0xFF07 => {
+                self.timer.write(addr, val);
+            }
+            0xFF08..=0xFF0E => {
+                unreachable!("No");
+            }
+            0xFF0F => { 
+                self.int_controller.write(addr, val); 
+            }
+            0xFF10..=0xFF3F => {
+                self.io[addr as usize - 0xFF00] = val;
+            }
+            //PPU control registers
+            0xFF40..=0xFF4B => {
+                self.ppu.write(addr, val);
+            }
+            0xFF4C..=0xFF7F => {
+                self.io[addr as usize - 0xFF00] = val;
+            }
             0xFF80..=0xFFFe => {
                 self.hram[addr as usize - 0xFF80] = val;
             }
             0xFFFF => {
-                self.ie_reg = val;
+                self.int_controller.write(addr, val);
             }
         }
     }
@@ -93,7 +117,7 @@ impl Bus {
                 return self.mapped_rom[addr as usize - 0x4000];
             }
             0x8000..=0x9FFF => {
-                return self.ppu.vram[addr as usize - 0x8000];
+                return self.ppu.read(addr);
             }
             0xA000..=0xBFFF => {
                 return self.eram[addr as usize - 0xA000];
@@ -108,19 +132,38 @@ impl Bus {
                 unreachable!("Attempting to read from echo ram! {addr}");
             }
             0xFE00..=0xFE9F => {
-                return self.ppu.oam[addr as usize - 0xFE00];
+                return self.ppu.read(addr);
             }
             0xFEA0..=0xFEFF => {
                 unreachable!("Attempting to read from echo ram! {addr}");
             }
-            0xFF00..=0xFF7F => {
+            0xFF00..=0xFF03 => {
+                return self.io[addr as usize - 0xFF00];
+            }
+            0xFF04..=0xFF07 => {
+                return self.timer.read(addr);
+            }
+            0xFF08..=0xFF0E => {
+                unreachable!("No");
+            }
+            0xFF0F => {
+                return self.int_controller.read(addr);
+            }
+            0xFF10..=0xFF3F => {
+                return self.io[addr as usize - 0xFF00];
+            }
+            0xFF40..=0xFF4B => {
+                // LCD control registers
+                return self.ppu.read(addr);
+            }
+            0xFF4C..=0xFF7F => {
                 return self.io[addr as usize - 0xFF00];
             }
             0xFF80..=0xFFFe => {
                 return self.hram[addr as usize - 0xFF80];
             }
             0xFFFF => {
-                return self.ie_reg;
+                return self.int_controller.read(addr);
             }
         }
     }
