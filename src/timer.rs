@@ -12,7 +12,7 @@ impl Timer {
         Timer {
             tima: 0,
             tma: 0,
-            tac: 0xF8,
+            tac: 0x0,
             system_counter: 0,
         }
     }
@@ -169,6 +169,29 @@ mod tests {
             }
             assert_eq!(timer.tick(), true);
             assert_eq!(timer.read(0xFF05), 0xFF);
+        }
+
+    }
+
+    #[test]
+    fn blargg_instr_timing_incre_every_four() {
+        // The blargg 'instr_timing'
+        // test configures the timer
+        // to increment every four ticks
+        let mut timer = Timer::new();
+        timer.tma = 0;
+        timer.tac = 0x5;
+
+        for i in 0..10 {
+
+            for _ in 0..3 {
+                timer.tick();
+                assert_eq!(timer.tima, i);
+            }
+
+            timer.tick();
+            assert_eq!(timer.tima, i+1);
+
         }
 
     }

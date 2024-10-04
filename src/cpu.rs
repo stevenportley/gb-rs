@@ -67,6 +67,8 @@ const A_REG: u8 = 7;
 const C_REG: u8 = 1;
 const HL_REG: u8 = 2;
 
+const HL_PTR: u8 = 6;
+
 #[derive(Debug, PartialEq)]
 enum Opcode {
     NOP,
@@ -964,7 +966,7 @@ impl Cpu {
                 op2: Some(Operands::Imm16(i)),
             } => {
                 self.wreg16(r1, i);
-                2
+                3
             }
             Instr {
                 opcode: Opcode::LD,
@@ -1037,7 +1039,7 @@ impl Cpu {
                 self.z_f = incre == 0;
                 self.wreg8(reg, incre);
 
-                return 1;
+                return if reg == HL_PTR { 3 } else { 1 };
             }
             Instr {
                 opcode: Opcode::DEC,
@@ -1052,7 +1054,7 @@ impl Cpu {
                 self.h_f = does_bit3_borrow(before, 1);
                 self.n_f = true;
 
-                return 1;
+                return if reg == HL_PTR { 3 } else { 1 };
             }
             Instr {
                 opcode: Opcode::LD,
@@ -1060,7 +1062,7 @@ impl Cpu {
                 op2: Some(Operands::Imm8(i)),
             } => {
                 self.wreg8(reg, i);
-                return 2;
+                return if reg == HL_PTR { 3 } else { 2 };
             }
             Instr {
                 opcode: Opcode::RLCA,
@@ -1195,7 +1197,7 @@ impl Cpu {
                 op1: None,
                 op2: None,
             } => {
-                println!("Stop instruction not implemented!");
+                unreachable!("Stop instruction not implemented!");
                 return 0;
             }
             Instr {
@@ -1205,7 +1207,7 @@ impl Cpu {
             } => {
                 let d = self.rreg8(src);
                 self.wreg8(dst, d);
-                return 2;
+                return if (dst == HL_PTR) || (src == HL_PTR) { 2 } else { 1 };
             }
             Instr {
                 opcode: Opcode::HALT,
@@ -1241,7 +1243,7 @@ impl Cpu {
                 self.z_f = new_val == 0;
                 self.n_f = false;
                 self.a = new_val;
-                return 1;
+                return if reg == HL_PTR { 2 } else { 1 };
             }
             Instr {
                 opcode: Opcode::ADC,
@@ -1269,7 +1271,7 @@ impl Cpu {
                 }
 
                 self.z_f = self.a == 0;
-                return 1;
+                return if r == HL_PTR { 2 } else { 1 };
             }
             Instr {
                 opcode: Opcode::SUB,
@@ -1285,7 +1287,7 @@ impl Cpu {
                 self.z_f = new_val == 0;
 
                 self.a = new_val;
-                return 1;
+                return if r == HL_PTR { 2 } else { 1 };
             }
             Instr {
                 opcode: Opcode::SBC,
@@ -1308,7 +1310,7 @@ impl Cpu {
 
                 self.a = self.a.wrapping_sub(carry);
                 self.z_f = self.a == 0;
-                return 1;
+                return if r == HL_PTR { 2 } else { 1 };
             }
             Instr {
                 opcode: Opcode::AND,
@@ -1320,7 +1322,7 @@ impl Cpu {
                 self.n_f = false;
                 self.h_f = true;
                 self.c_f = false;
-                return 1;
+                return if r == HL_PTR { 2 } else { 1 };
             }
             Instr {
                 opcode: Opcode::XOR,
@@ -1332,7 +1334,7 @@ impl Cpu {
                 self.n_f = false;
                 self.h_f = false;
                 self.c_f = false;
-                return 1;
+                return if r == HL_PTR { 2 } else { 1 };
             }
             Instr {
                 opcode: Opcode::OR,
@@ -1344,7 +1346,7 @@ impl Cpu {
                 self.n_f = false;
                 self.h_f = false;
                 self.c_f = false;
-                return 1;
+                return if r == HL_PTR { 2 } else { 1 };
             }
             Instr {
                 opcode: Opcode::CP,
@@ -1359,7 +1361,7 @@ impl Cpu {
                 let new_val = self.a.wrapping_sub(reg_val);
                 self.z_f = new_val == 0;
 
-                return 1;
+                return if r == HL_PTR { 2 } else { 1 };
             }
             Instr {
                 opcode: Opcode::ADD,
@@ -1754,7 +1756,7 @@ impl Cpu {
                 op2: None,
             } => {
                 self.rlc(r);
-                return if r == HL_REG { 4 } else { 2 };
+                return if r == HL_PTR { 4 } else { 2 };
             }
             Instr {
                 opcode: Opcode::RRC,
@@ -1762,7 +1764,7 @@ impl Cpu {
                 op2: None,
             } => {
                 self.rrc(r);
-                return if r == HL_REG { 4 } else { 2 };
+                return if r == HL_PTR { 4 } else { 2 };
             }
             Instr {
                 opcode: Opcode::RL,
@@ -1770,7 +1772,7 @@ impl Cpu {
                 op2: None,
             } => {
                 self.rl(r);
-                return if r == HL_REG { 4 } else { 2 };
+                return if r == HL_PTR { 4 } else { 2 };
             }
             Instr {
                 opcode: Opcode::RR,
@@ -1778,7 +1780,7 @@ impl Cpu {
                 op2: None,
             } => {
                 self.rr(r);
-                return if r == HL_REG { 4 } else { 2 };
+                return if r == HL_PTR { 4 } else { 2 };
             }
             Instr {
                 opcode: Opcode::SLA,
@@ -1793,7 +1795,7 @@ impl Cpu {
                 self.n_f = false;
                 self.h_f = false;
                 self.z_f = new_val == 0;
-                return if r == HL_REG { 4 } else { 2 };
+                return if r == HL_PTR { 4 } else { 2 };
             }
             Instr {
                 opcode: Opcode::SRA,
@@ -1809,7 +1811,7 @@ impl Cpu {
                 self.n_f = false;
                 self.h_f = false;
                 self.z_f = new_val == 0;
-                return if r == HL_REG { 4 } else { 2 };
+                return if r == HL_PTR { 4 } else { 2 };
             }
             Instr {
                 opcode: Opcode::SWAP,
@@ -1826,7 +1828,7 @@ impl Cpu {
                 self.n_f = false;
                 self.h_f = false;
                 self.c_f = false;
-                return if r == HL_REG { 4 } else { 2 };
+                return if r == HL_PTR { 4 } else { 2 };
             }
             Instr {
                 opcode: Opcode::SRL,
@@ -1841,7 +1843,7 @@ impl Cpu {
                 self.n_f = false;
                 self.h_f = false;
                 self.c_f = (reg_val & 0x1) == 0x1;
-                return if r == HL_REG { 4 } else { 2 };
+                return if r == HL_PTR { 4 } else { 2 };
             }
             Instr {
                 opcode: Opcode::BIT,
@@ -1854,7 +1856,7 @@ impl Cpu {
                 self.z_f = (reg_val & mask) == 0;
                 self.n_f = false;
                 self.h_f = true;
-                return if r == HL_REG { 4 } else { 2 };
+                return if r == HL_PTR { 3 } else { 2 };
             }
             Instr {
                 opcode: Opcode::RES,
@@ -1865,7 +1867,7 @@ impl Cpu {
                 let mask = 0x1 << b3;
                 let new_val = reg_val & !mask;
                 self.wreg8(r, new_val);
-                return if r == HL_REG { 4 } else { 2 };
+                return if r == HL_PTR { 4 } else { 2 };
             }
             Instr {
                 opcode: Opcode::SET,
@@ -1876,7 +1878,7 @@ impl Cpu {
                 let mask = 0x1 << b3;
                 let new_val = reg_val | mask;
                 self.wreg8(r, new_val);
-                return if r == HL_REG { 4 } else { 2 };
+                return if r == HL_PTR { 4 } else { 2 };
             }
 
             _ => unreachable!("Unhandle instruction! {:?}", instr),
@@ -1909,7 +1911,9 @@ impl Cpu {
         
 
         let next_instr = self.next_instr();
+        //println!("{:?}", next_instr);
         clks += self.execute_instr(next_instr);
+        //self.log_state();
         for _ in 0..clks {
             self.bus.ppu.tick();
             if self.bus.timer.tick() {
@@ -2011,4 +2015,26 @@ mod tests {
     fn rom11_op_a_hl() {
         rom_test(Path::new("roms/testrom-cpuinstr-11.gb"));
     }
+
+    #[test]
+    fn instr_timing() {
+        rom_test(Path::new("roms/instr_timing.gb"));
+    }
+
+    /*
+     * We are going to continue to fail this
+     * test because are not cycle accurate.
+     * We execute instructions in once instant
+     * and iterate the rest of the system
+     * based on the cycle count of that instruction,
+     * which is technically not correct but it should
+     * not matter for most games.
+     *
+     * See: https://www.reddit.com/r/EmuDev/comments/jzm8xx/are_memory_access_timings_important_for_medium/
+     *
+    #[test]
+    fn mem_timing() {
+        rom_test(Path::new("roms/mem_timing.gb"));
+    }
+    */
 }

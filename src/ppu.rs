@@ -90,7 +90,7 @@ impl PPU {
             0xFF41 => { return self.STAT; }
             0xFF42 => { return self.SCY; }
             0xFF43 => { return self.SCX; }
-            0xFF44 => { return 0x90;/* return self.LY;*/ }
+            0xFF44 => { return self.LY; }
             0xFF45 => { return self.LYC; }
             0xFF46 => { unimplemented!("DMA not implemented!") }
             0xFF47 => { return self.BGP; }

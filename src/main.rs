@@ -52,14 +52,6 @@ fn main() -> io::Result<()> {
 }
 
 fn gui(mut gb: Cpu) {
-    let test_dump = Path::new("roms/testris_vram.dump");
-
-    let rom = std::fs::read(test_dump).expect("Unable to load test rom: {rom_path}");
-    /*
-    let mut ppu = gb_rs::ppu::PPU::new();
-
-    ppu.VRAM.copy_from_slice(&rom);
-    */
 
     let event_loop = EventLoop::new();
     let mut input = WinitInputHelper::new();
@@ -80,19 +72,18 @@ fn gui(mut gb: Cpu) {
     };
 
 
-
     event_loop.run(move |event, _, control_flow| {
         //let background = ppu.get_background();
         //let background = ppu.dump_vram();
 
-        for _ in 0..1000 {
-            gb.run_one();
-        }
-
-        let background = gb.bus.ppu.get_background();
 
         // Draw the current frame
         if let Event::RedrawRequested(_) = event {
+            for _ in 0..5000 {
+                gb.run_one();
+            }
+
+            let background = gb.bus.ppu.get_background();
 
             let mut tile_renderer = gb_rs::tile::TileRenderer::from_tiles(&background, WIDTH as usize);
 
