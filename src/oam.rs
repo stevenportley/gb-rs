@@ -89,7 +89,7 @@ impl<'a> OamMap<'a> {
     }
 
     pub fn render_line(&self, pixels: &mut [u8],  tiles: &[Tile], ly: u8, large_tiles: bool) -> u32 {
-        assert_eq!(pixels.len(), 256);
+        assert_eq!(pixels.len(), 160);
 
         let mut oam_iter = self.iter(ly, large_tiles);
 
@@ -251,7 +251,7 @@ mod tests {
 
 
     #[test]
-    fn oam_render_test() {
+    fn oam_overlap() {
 
         let mut mem = [0; 0xA0];
 
@@ -279,7 +279,7 @@ mod tests {
         let oams : Vec<_> = oam_iter.collect();
         assert_eq!(oams.len(), 4);
 
-        let mut pixels = [0; 256];
+        let mut pixels = [0; 160];
         let _ = oam_map.render_line(&mut pixels, &get_test_tiles(), 0, false);
 
         assert_eq!(pixels[0..14], [0, 0, 1, 1, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3]);
@@ -287,5 +287,88 @@ mod tests {
             assert_eq!(*val, 0);
         }
     }
+
+    #[test]
+    fn oam_blank() {
+
+        let mem = [0; 0xA0];
+        let oam_map = OamMap::from_mem(&mem);
+        let oam_iter = oam_map.iter(0, false);
+
+        let oams : Vec<_> = oam_iter.collect();
+        assert_eq!(oams.len(), 0);
+
+        let mut pixels = [0; 160];
+        let _ = oam_map.render_line(&mut pixels, &get_test_tiles(), 0, false);
+        assert_eq!(pixels, [0; 160]);
+    }
+
+    #[test]
+    fn oam_single_sprite() {
+
+        let mut mem = [0; 0xA0];
+        mem[8] = 10;
+        mem[9] = 0x50;
+        mem[10] = 2;
+
+        let oam_map = OamMap::from_mem(&mem);
+        let oam_iter = oam_map.iter(0, false);
+
+
+        let oams : Vec<_> = oam_iter.collect();
+        assert_eq!(oams.len(), 1);
+
+        let mut pixels = [0; 160];
+        let _ = oam_map.render_line(&mut pixels, &get_test_tiles(), 0, false);
+
+        let x_pos  = (oams[0].x_pos() - 8) as usize;
+        assert_eq!(pixels[x_pos..x_pos+8], [2; 8]);
+    }
+
+    #[test]
+    fn oam_left_clip() {
+
+        let mut mem = [0; 0xA0];
+        mem[8] = 10;
+        mem[9] = 2;
+        mem[10] = 1;
+
+        let oam_map = OamMap::from_mem(&mem);
+        let oam_iter = oam_map.iter(0, false);
+
+
+        let oams : Vec<_> = oam_iter.collect();
+        assert_eq!(oams.len(), 1);
+
+        let mut pixels = [0; 160];
+        let _ = oam_map.render_line(&mut pixels, &get_test_tiles(), 0, false);
+
+        assert_eq!(pixels[0..2], [1, 1]);
+        assert_eq!(pixels[2..], [0; 158]);
+    }
+
+    #[test]
+    fn oam_right_clip() {
+
+        let mut mem = [0; 0xA0];
+        mem[8] = 10;
+        mem[9] = 164;
+        mem[10] = 1;
+
+        let oam_map = OamMap::from_mem(&mem);
+        let oam_iter = oam_map.iter(0, false);
+
+
+        let oams : Vec<_> = oam_iter.collect();
+        assert_eq!(oams.len(), 1);
+
+        let mut pixels = [0; 160];
+        let _ = oam_map.render_line(&mut pixels, &get_test_tiles(), 0, false);
+
+        assert_eq!(pixels[0..156], [0; 156]);
+        assert_eq!(pixels[156..], [1; 4]);
+    }
+
+
 
 }
