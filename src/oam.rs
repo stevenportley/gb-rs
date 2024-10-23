@@ -232,7 +232,7 @@ mod tests {
 
     }
 
-    fn get_test_tiles<'a>() -> [Tile<'static>; 4] {
+    fn get_test_tiles() -> [Tile<'static>; 4] {
         static BYTES : [u8; 64] = [ 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
         0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,
         0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,0x00,0xFF,
@@ -249,6 +249,14 @@ mod tests {
         tiles
     }
 
+    fn get_weird_tile() -> Tile<'static> {
+
+        static BYTES: [u8; 16] = [
+            0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0x0F,0xF0,0x0F,0xF0,0x0F,0xF0,0x0F,0xF0,0x0F,
+        ];
+
+        Tile::from_bytes(&BYTES)
+    }
 
     #[test]
     fn oam_overlap() {
@@ -367,6 +375,46 @@ mod tests {
 
         assert_eq!(pixels[0..156], [0; 156]);
         assert_eq!(pixels[156..], [1; 4]);
+    }
+
+    #[test]
+    fn oam_y_flip() {
+
+        let mut mem = [0; 0xA0];
+        mem[8] = 10;
+        mem[9] = 16;
+        mem[10] = 0;
+        mem[11] = 0x40; // just bit 6, y_flip
+
+        let oam_map = OamMap::from_mem(&mem);
+        let oam_iter = oam_map.iter(0, false);
+
+
+        let oams : Vec<_> = oam_iter.collect();
+        assert_eq!(oams.len(), 1);
+
+        assert_eq!(oams[0].get_pixels(&[get_weird_tile()], 0), [1, 1, 1, 1, 2, 2, 2, 2]);
+        assert_eq!(oams[0].get_pixels(&[get_weird_tile()], 7), [0, 0, 0, 0, 3, 3, 3, 3]);
+    }
+
+    #[test]
+    fn oam_x_flip() {
+
+        let mut mem = [0; 0xA0];
+        mem[8] = 10;
+        mem[9] = 16;
+        mem[10] = 0;
+        mem[11] = 0x20; // just bit 5, x_flip
+
+        let oam_map = OamMap::from_mem(&mem);
+        let oam_iter = oam_map.iter(0, false);
+
+
+        let oams : Vec<_> = oam_iter.collect();
+        assert_eq!(oams.len(), 1);
+
+        assert_eq!(oams[0].get_pixels(&[get_weird_tile()], 0), [3, 3, 3, 3, 0, 0, 0, 0]);
+        assert_eq!(oams[0].get_pixels(&[get_weird_tile()], 7), [2, 2, 2, 2, 1, 1, 1, 1]);
     }
 
 
