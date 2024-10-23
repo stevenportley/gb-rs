@@ -1122,11 +1122,20 @@ impl Cpu {
                                  *
                                  */
                 if self.n_f {
-                    if self.c_f { self.a = self.a.wrapping_sub(0x60); }
-                    if self.h_f { self.a = self.a.wrapping_sub(0x6); }
+                    if self.c_f {
+                        self.a = self.a.wrapping_sub(0x60);
+                    }
+                    if self.h_f {
+                        self.a = self.a.wrapping_sub(0x6);
+                    }
                 } else {
-                    if self.c_f || self.a > 0x99 { self.a = self.a.wrapping_add(0x60); self.c_f = true; }
-                    if self.h_f || (self.a & 0x0f) > 0x09 { self.a = self.a.wrapping_add(0x6); }
+                    if self.c_f || self.a > 0x99 {
+                        self.a = self.a.wrapping_add(0x60);
+                        self.c_f = true;
+                    }
+                    if self.h_f || (self.a & 0x0f) > 0x09 {
+                        self.a = self.a.wrapping_add(0x6);
+                    }
                 }
 
                 self.z_f = self.a == 0;
@@ -1185,7 +1194,7 @@ impl Cpu {
                     let offset = i as i8;
                     let curr_pc = self.pc as i32;
                     let new_pc = curr_pc + offset as i32;
-            
+
                     self.pc = new_pc as u16;
                     return 3;
                 }
@@ -1207,7 +1216,11 @@ impl Cpu {
             } => {
                 let d = self.rreg8(src);
                 self.wreg8(dst, d);
-                return if (dst == HL_PTR) || (src == HL_PTR) { 2 } else { 1 };
+                return if (dst == HL_PTR) || (src == HL_PTR) {
+                    2
+                } else {
+                    1
+                };
             }
             Instr {
                 opcode: Opcode::HALT,
@@ -1223,7 +1236,7 @@ impl Cpu {
                     self.sleep = true;
                     return 1;
                 }
-                
+
                 //HALT BUG!
                 assert!(false);
 
@@ -1886,15 +1899,19 @@ impl Cpu {
     }
 
     pub fn run_one(&mut self) {
-
         // If we are halted waiting for next interrupt,
         // keep the timer running
         if self.sleep {
+            let mut cnt = 0;
             while !self.bus.int_controller.pending() {
                 self.bus.ppu.tick();
                 if self.bus.timer.tick() {
                     self.bus.int_controller.interrupt(IntSource::TIMER);
                 }
+                if cnt == 100 {
+                    return;
+                }
+                cnt += 1;
             }
 
             self.sleep = false;
@@ -1908,10 +1925,9 @@ impl Cpu {
                 clks += self.handle_interrupt(interrupt);
             }
         }
-        
 
         let next_instr = self.next_instr();
-        //println!("{:?}", next_instr);
+        println!("{:?}", next_instr);
         clks += self.execute_instr(next_instr);
         //self.log_state();
         for _ in 0..clks {
@@ -1922,11 +1938,18 @@ impl Cpu {
         }
     }
 
-
     pub fn handle_interrupt(&mut self, int_source: IntSource) -> usize {
         self.ime = false;
         self.push_stack(self.pc);
-        self.pc = 0x50;
+
+        self.pc = match int_source {
+            IntSource::VBLANK => 0x40,
+            IntSource::LCD => 0x48,
+            IntSource::TIMER => 0x50,
+            IntSource::SERIAL => 0x58,
+            IntSource::JOYPAD => 0x60
+        };
+
         self.bus.int_controller.interrupt_clear(int_source);
         return 5;
     }

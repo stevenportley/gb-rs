@@ -1,11 +1,9 @@
-
 pub struct Timer {
     tima: u8,
     tma: u8,
     tac: u8,
     system_counter: u16,
 }
-
 
 impl Timer {
     pub fn new() -> Self {
@@ -21,28 +19,45 @@ impl Timer {
         return (self.tac & 0x4) == 0x4;
     }
 
-
     //TODO: Should handle reset of DIV (and other things?)
     //      whenever we see a HALT instruction
     pub fn write(&mut self, addr: u16, val: u8) {
         match addr {
-            0xFF04 => { self.system_counter = 0; },
-            0xFF05 => { self.tima = val; },
-            0xFF06 => { self.tma = val; },
-            0xFF07 => { 
-                self.tac = val; 
-            },
-            _ => { unreachable!("Invalid write to timer"); }
+            0xFF04 => {
+                self.system_counter = 0;
+            }
+            0xFF05 => {
+                self.tima = val;
+            }
+            0xFF06 => {
+                self.tma = val;
+            }
+            0xFF07 => {
+                self.tac = val;
+            }
+            _ => {
+                unreachable!("Invalid write to timer");
+            }
         }
     }
 
     pub fn read(&self, addr: u16) -> u8 {
         match addr {
-            0xFF04 => { return (self.system_counter >> 8) as u8; },
-            0xFF05 => { return self.tima; },
-            0xFF06 => { return self.tma; },
-            0xFF07 => { return self.tac; },
-            _ => { unreachable!("Invalid write to timer"); }
+            0xFF04 => {
+                return (self.system_counter >> 8) as u8;
+            }
+            0xFF05 => {
+                return self.tima;
+            }
+            0xFF06 => {
+                return self.tma;
+            }
+            0xFF07 => {
+                return self.tac;
+            }
+            _ => {
+                unreachable!("Invalid write to timer");
+            }
         }
     }
 
@@ -64,7 +79,6 @@ impl Timer {
             _ => unreachable!("No"),
         } - 1;
 
-       
         // Check and see if the LSB triggered falling edge
         let pre_lsb = ((pre_add >> num_shift) & 1) == 1;
         let post_lsb = ((self.system_counter >> num_shift) & 1) == 1;
@@ -170,7 +184,6 @@ mod tests {
             assert_eq!(timer.tick(), true);
             assert_eq!(timer.read(0xFF05), 0xFF);
         }
-
     }
 
     #[test]
@@ -183,17 +196,13 @@ mod tests {
         timer.tac = 0x5;
 
         for i in 0..10 {
-
             for _ in 0..3 {
                 timer.tick();
                 assert_eq!(timer.tima, i);
             }
 
             timer.tick();
-            assert_eq!(timer.tima, i+1);
-
+            assert_eq!(timer.tima, i + 1);
         }
-
     }
 }
-

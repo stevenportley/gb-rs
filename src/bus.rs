@@ -86,8 +86,8 @@ impl Bus {
             0xFF08..=0xFF0E => {
                 unreachable!("No");
             }
-            0xFF0F => { 
-                self.int_controller.write(addr, val); 
+            0xFF0F => {
+                self.int_controller.write(addr, val);
             }
             0xFF10..=0xFF3F => {
                 self.io[addr as usize - 0xFF00] = val;
@@ -137,7 +137,11 @@ impl Bus {
             0xFEA0..=0xFEFF => {
                 unreachable!("Attempting to read from echo ram! {addr}");
             }
-            0xFF00..=0xFF03 => {
+            0xFF00 => {
+                // Joypad input
+                return 0xFF;
+            }
+            0xFF01..=0xFF03 => {
                 return self.io[addr as usize - 0xFF00];
             }
             0xFF04..=0xFF07 => {
@@ -159,7 +163,7 @@ impl Bus {
             0xFF4C..=0xFF7F => {
                 return self.io[addr as usize - 0xFF00];
             }
-            0xFF80..=0xFFFe => {
+            0xFF80..=0xFFFE => {
                 return self.hram[addr as usize - 0xFF80];
             }
             0xFFFF => {
@@ -169,7 +173,7 @@ impl Bus {
     }
 
     pub fn is_passed(&self) -> bool {
-        let (sl,_) = self.passed_buf.as_slices();
+        let (sl, _) = self.passed_buf.as_slices();
         let str = std::str::from_utf8(sl).expect("No!");
         return str == "Passed";
     }

@@ -1,4 +1,3 @@
-
 pub struct InterruptController {
     int_en: u8,
     int_f: u8, // IF, but I can't use `if`
@@ -6,15 +5,14 @@ pub struct InterruptController {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum IntSource {
-     VBLANK = 0x1,
-     LCD = 0x2,
-     TIMER = 0x4,
-     SERIAL = 0x8,
-     JOYPAD = 0x10,
+    VBLANK = 0x1,
+    LCD = 0x2,
+    TIMER = 0x4,
+    SERIAL = 0x8,
+    JOYPAD = 0x10,
 }
 
 impl InterruptController {
-
     pub fn new() -> Self {
         InterruptController {
             int_en: 0,
@@ -22,20 +20,31 @@ impl InterruptController {
         }
     }
 
-
     pub fn write(&mut self, addr: u16, val: u8) {
         match addr {
-            0xFF0F => { self.int_f = val; }
-            0xFFFF => { self.int_en = val; }
-            _ => { unreachable!("Invalid memory access"); }
+            0xFF0F => {
+                self.int_f = val;
+            }
+            0xFFFF => {
+                self.int_en = val;
+            }
+            _ => {
+                unreachable!("Invalid memory access");
+            }
         };
     }
 
     pub fn read(&self, addr: u16) -> u8 {
         match addr {
-            0xFF0F => { return self.int_f; }
-            0xFFFF => { return self.int_en; }
-            _ => { unreachable!("Invalid memory access"); }
+            0xFF0F => {
+                return self.int_f;
+            }
+            0xFFFF => {
+                return self.int_en;
+            }
+            _ => {
+                unreachable!("Invalid memory access");
+            }
         };
     }
 
@@ -50,8 +59,6 @@ impl InterruptController {
     pub fn pending(&self) -> bool {
         self.int_f != 0
     }
-
-
 }
 
 impl Iterator for InterruptController {
@@ -74,12 +81,10 @@ impl Iterator for InterruptController {
             }
 
             bit_idx <<= 1;
-
         }
 
         return None;
     }
-
 }
 
 #[cfg(test)]
