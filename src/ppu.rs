@@ -35,6 +35,7 @@ pub struct PPU {
     wx: u8,
     curr_x: u8,
     mode: PpuMode,
+    frame: [[u8; 160]; 144]
 }
 
 impl PPU {
@@ -56,6 +57,7 @@ impl PPU {
             wx: 0,
             curr_x: 0,
             mode: PpuMode::OAMSCAN,
+            frame: [[0; 160]; 144],
         }
     }
 
@@ -86,7 +88,7 @@ impl PPU {
                 self.lyc = val;
             }
             0xFF46 => {
-                unimplemented!("DMA not implemented!")
+                unimplemented!("DMA not implemented in PPU!")
             }
             0xFF47 => {
                 self.bgp = val;
@@ -121,7 +123,7 @@ impl PPU {
                 return self.lcdc;
             }
             0xFF41 => {
-                return self.stat;
+                return self.get_stat();
             }
             0xFF42 => {
                 return self.scy;
@@ -136,7 +138,7 @@ impl PPU {
                 return self.lyc;
             }
             0xFF46 => {
-                unimplemented!("DMA not implemented!")
+                unimplemented!("Reading from DMA register!?!")
             }
             0xFF47 => {
                 return self.bgp;
@@ -201,7 +203,7 @@ impl PPU {
 
         let oam_map = OamMap::from_mem(&self.oam);
         for ly in 0..bkgnd.len() {
-            oam_map.render_line(&mut bkgnd[ly][0..256], &bkgd_tiles, ly as u8, false);
+            //oam_map.render_line(&mut bkgnd[ly][0..160], &bkgd_tiles, ly as u8, false);
         }
 
         let mut bkgnd_iter = bkgnd.into_iter().flatten();
@@ -247,6 +249,85 @@ impl PPU {
     }
     */
 
+    pub fn run_one(&mut self) -> (u8, Option<IntSource>) {
+        match self.mode {
+            PpuMode::OAMSCAN => {
+                self.mode = PpuMode::DRAW;
+                // No interrupts can trigger 
+                // when moving to DRAW
+                return (20, None)
+            }
+            PpuMode::DRAW => {
+                self.mode = PpuMode::HBLANK;
+
+                // Update a line
+                //TODO: Incorproate SCX
+                //let adjusted_ly = self.ly.wrapping_add(self.scy);
+                
+
+                // Check for HBLANK interrupt
+                // We are not considering 
+                // LCD mode 1 (VLBLANK) interrupt
+                // because is already has it's own
+                // interupt? Why would nintendo 
+                // do this?
+                if (self.stat & 0x8) != 0 {
+                    //TODO: Update this with actual
+                    //      LCD timing (including delay)
+                    //      rather than just using the minimum
+                    return (43, Some(IntSource::LCD))
+                } else {
+                    return (43, None)
+                }
+            }
+
+            PpuMode::HBLANK => {
+
+                if self.ly == 143 {
+                    self.ly += 1;
+                    self.mode = PpuMode::VBLANK;
+                    return (51, Some(IntSource::VBLANK));
+                } else {
+                    self.ly += 1;
+                    self.mode = PpuMode::OAMSCAN;
+
+                    // Check for LYC int
+                    if (self.stat & 0x40) != 0 {
+                        if self.ly == self.lyc {
+                            return (51, Some(IntSource::LCD));
+                        }
+                    }
+
+                    // Check for OAM scan interrupt
+                    if (self.stat & 0x20) != 0 {
+                        return (51, Some(IntSource::LCD));
+                    } else {
+                        return (51, None);
+                    }
+                }
+            }
+
+            PpuMode::VBLANK => {
+                if self.ly == 153 {
+                    // Go back OAM Scan and restart!
+                    self.mode = PpuMode::OAMSCAN;
+                    self.ly = 0;
+                    // Check for OAM scan interrupt
+                    if (self.stat & 0x20) != 0 {
+                        return (114, Some(IntSource::LCD));
+                    } else {
+                        return (114, None);
+                    }
+                } else {
+                    self.ly += 1;
+                    return (114, None);
+                }
+            }
+
+        }
+
+    }
+
     pub fn tick(&mut self) -> Option<IntSource> {
         if self.curr_x == 113 {
             self.curr_x = 0;
@@ -262,10 +343,7 @@ impl PPU {
 
         if self.ly >= 144 {
             self.mode = PpuMode::VBLANK;
-            /*
-            self.update_stat();
             return Some(IntSource::VBLANK);
-            */
         } else if self.curr_x < 20 {
             self.mode = PpuMode::OAMSCAN;
         } else if self.curr_x >= 94 {
@@ -274,18 +352,12 @@ impl PPU {
             self.mode = PpuMode::DRAW;
         }
 
-        self.update_stat();
-
         return None;
     }
 
-    fn update_stat(&mut self) {
-        self.stat = self.stat & !0x7;
-
-        if self.ly == self.lyc {
-            self.ly |= 0x4;
-        }
-
-        self.lyc |= self.mode as u8;
+    fn get_stat(&self) -> u8 {
+        let base = self.stat & !0x7;
+        return base | self.mode as u8 | 
+            if self.ly == self.lyc { 0x6 } else { 0 };
     }
 }

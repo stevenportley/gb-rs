@@ -61,14 +61,14 @@ impl Bus {
                 self.mapped_wram[addr as usize - 0xD000] = val;
             }
             0xE000..=0xFDFF => {
-                unreachable!("Attempting to write to echo ram! {addr}, {val}");
+                println!("Attempting to write to echo ram! {addr}, {val}");
             }
             0xFE00..=0xFE9F => {
                 //OAM
                 self.ppu.write(addr, val);
             }
             0xFEA0..=0xFEFF => {
-                //println!("Attempting to write to prohibited area! {addr}, {val}");
+                println!("Attempting to write to prohibited area! {addr}, {val}");
             }
             0xFF00..=0xFF03 => {
                 self.io[addr as usize - 0xFF00] = val;
@@ -84,7 +84,7 @@ impl Bus {
                 self.timer.write(addr, val);
             }
             0xFF08..=0xFF0E => {
-                unreachable!("No");
+                println!("Attempting to write to prohibited area! {addr}, {val}");
             }
             0xFF0F => {
                 self.int_controller.write(addr, val);
@@ -94,7 +94,16 @@ impl Bus {
             }
             //PPU control registers
             0xFF40..=0xFF4B => {
-                self.ppu.write(addr, val);
+
+                if addr == 0xFF46 {
+                    let mut src = val as u16 * 0x100;
+                    for dst in 0xFE00..=0xFE9F {
+                        self.write(dst, self.read(src));
+                        src += 1;
+                    }
+                } else {
+                    self.ppu.write(addr, val);
+                }
             }
             0xFF4C..=0xFF7F => {
                 self.io[addr as usize - 0xFF00] = val;
@@ -129,13 +138,15 @@ impl Bus {
                 return self.mapped_wram[addr as usize - 0xD000];
             }
             0xE000..=0xFDFF => {
-                unreachable!("Attempting to read from echo ram! {addr}");
+                println!("Attempting to read from echo ram! {addr}");
+                return 0;
             }
             0xFE00..=0xFE9F => {
                 return self.ppu.read(addr);
             }
             0xFEA0..=0xFEFF => {
-                unreachable!("Attempting to read from echo ram! {addr}");
+                println!("Attempting to read from invalid ram! {addr}");
+                return 0;
             }
             0xFF00 => {
                 // Joypad input
@@ -148,7 +159,8 @@ impl Bus {
                 return self.timer.read(addr);
             }
             0xFF08..=0xFF0E => {
-                unreachable!("No");
+                println!("Attempting to read from invalid ram! {addr}");
+                return 0;
             }
             0xFF0F => {
                 return self.int_controller.read(addr);

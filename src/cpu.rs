@@ -1,5 +1,5 @@
 use crate::{bus::Bus, interrupts::IntSource};
-use std::io;
+use std::{io, thread::sleep, time::Duration};
 
 fn does_bit3_overflow(a: u8, b: u8) -> bool {
     let a = a & 0xF;
@@ -1926,16 +1926,31 @@ impl Cpu {
             }
         }
 
-        let next_instr = self.next_instr();
-        println!("{:?}", next_instr);
-        clks += self.execute_instr(next_instr);
+        let (ppu_clks, maybe_int) = self.bus.ppu.run_one();
+        let mut clks_to_run = (ppu_clks - clks as u8) as i32;
+
+        while clks_to_run > 0 {
+            let next_instr = self.next_instr();
+            clks_to_run -= self.execute_instr(next_instr) as i32;
+        }
+
         //self.log_state();
+        if let Some(intr) = maybe_int {
+            dbg!(intr);
+            self.bus.int_controller.interrupt(intr)
+        }
+
         for _ in 0..clks {
-            self.bus.ppu.tick();
+            /*
+            if let Some(intr) = self.bus.ppu.tick() {
+                self.bus.int_controller.interrupt(intr)
+            }*/
             if self.bus.timer.tick() {
                 self.bus.int_controller.interrupt(IntSource::TIMER);
             }
         }
+
+        sleep(Duration::from_millis(clks as u64))
     }
 
     pub fn handle_interrupt(&mut self, int_source: IntSource) -> usize {

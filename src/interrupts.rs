@@ -1,6 +1,6 @@
 pub struct InterruptController {
-    int_en: u8,
-    int_f: u8, // IF, but I can't use `if`
+    pub int_en: u8,
+    pub int_f: u8, // IF, but I can't use `if`
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

@@ -7,6 +7,7 @@ const VERT_TILES: usize = 32;
 
 const WIDTH: u32 = (HORIZ_TILES * 8) as u32;
 const HEIGHT: u32 = (VERT_TILES * 8) as u32;
+const SCALING: f64 = 4.0;
 
 use pixels::{Pixels, SurfaceTexture};
 use winit::dpi::LogicalSize;
@@ -38,7 +39,7 @@ fn gui(mut gb: Cpu) {
     let event_loop = EventLoop::new();
     let mut input = WinitInputHelper::new();
     let window = {
-        let size = LogicalSize::new(WIDTH as f64, HEIGHT as f64);
+        let size = LogicalSize::new(SCALING * WIDTH as f64, SCALING * HEIGHT as f64);
         WindowBuilder::new()
             .with_title("Hello Pixels")
             .with_inner_size(size)
