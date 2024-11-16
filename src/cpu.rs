@@ -269,7 +269,7 @@ impl Cpu {
             2 => {
                 let mut hl = make_u16(self.h, self.l);
                 self.bus.write(hl, val);
-                hl = hl + 1;
+                hl = hl.wrapping_add(1);
                 self.h = (hl >> 8) as u8;
                 self.l = (hl & 0xFF) as u8;
             }
@@ -1925,32 +1925,21 @@ impl Cpu {
                 clks += self.handle_interrupt(interrupt);
             }
         }
+        
+        let next_instr = self.next_instr();
+        clks += self.execute_instr(next_instr);
 
-        let (ppu_clks, maybe_int) = self.bus.ppu.run_one();
-        let mut clks_to_run = (ppu_clks - clks as u8) as i32;
-
-        while clks_to_run > 0 {
-            let next_instr = self.next_instr();
-            clks_to_run -= self.execute_instr(next_instr) as i32;
-        }
-
-        //self.log_state();
-        if let Some(intr) = maybe_int {
-            dbg!(intr);
-            self.bus.int_controller.interrupt(intr)
-        }
 
         for _ in 0..clks {
-            /*
             if let Some(intr) = self.bus.ppu.tick() {
                 self.bus.int_controller.interrupt(intr)
-            }*/
+            }
+
             if self.bus.timer.tick() {
                 self.bus.int_controller.interrupt(IntSource::TIMER);
             }
         }
 
-        sleep(Duration::from_millis(clks as u64))
     }
 
     pub fn handle_interrupt(&mut self, int_source: IntSource) -> usize {

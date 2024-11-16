@@ -1,6 +1,11 @@
 use gb_rs::cpu::Cpu;
+use winit::window::Fullscreen;
 use std::env;
 use std::io;
+
+mod gui;
+
+use gui::Gui;
 
 const HORIZ_TILES: usize = 32;
 const VERT_TILES: usize = 32;
@@ -44,9 +49,12 @@ fn gui(mut gb: Cpu) {
             .with_title("Hello Pixels")
             .with_inner_size(size)
             .with_min_inner_size(size)
+            .with_fullscreen(Some(Fullscreen::Borderless(None)))
             .build(&event_loop)
             .unwrap()
     };
+
+    let mut scale_factor = window.scale_factor();
 
     let mut pixels = {
         let window_size = window.inner_size();
@@ -54,18 +62,38 @@ fn gui(mut gb: Cpu) {
         Pixels::new(WIDTH, HEIGHT, surface_texture).expect("Failed to make new pixels??")
     };
 
+    let mut gui = Gui::new(&window, &pixels);
+
     event_loop.run(move |event, _, control_flow| {
         //let background = ppu.get_background();
         //let background = ppu.dump_vram();
 
         // Draw the current frame
         if let Event::RedrawRequested(_) = event {
-            for _ in 0..10000 {
+            for _ in 0..1000 {
                 gb.run_one();
             }
 
+            std::thread::sleep_ms(1);
+
             let frame = gb.bus.ppu.get_frame2();
             pixels.frame_mut()[..(8*32)*(4*8*32)].copy_from_slice(&frame);
+
+            gui.prepare(&window).expect("gui.prepare() failed");
+
+            let render_result = pixels.render_with(|encoder, render_target, context| {
+                context.scaling_renderer.render(encoder, render_target);
+
+                gui.render(&window, encoder, render_target, context)?;
+
+                Ok(())
+            });
+
+            if let Err(err) = render_result {
+                println!("pixels.render: {}", err);
+                *control_flow = ControlFlow::Exit;
+                return;
+            }
 
             /*
             let background = gb.bus.ppu.get_background();
@@ -84,13 +112,12 @@ fn gui(mut gb: Cpu) {
             }
             */
 
-            pixels.render().expect("Failed to render??");
         }
 
         // Handle input events
         if input.update(&event) {
             // Close events
-            if input.key_pressed(VirtualKeyCode::Escape) || input.close_requested() {
+            if input.key_pressed(VirtualKeyCode::Escape) {
                 *control_flow = ControlFlow::Exit;
                 return;
             }

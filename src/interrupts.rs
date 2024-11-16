@@ -23,10 +23,10 @@ impl InterruptController {
     pub fn write(&mut self, addr: u16, val: u8) {
         match addr {
             0xFF0F => {
-                self.int_f = val;
+                self.int_f = val & 0x1F;
             }
             0xFFFF => {
-                self.int_en = val;
+                self.int_en = val & 0x1F;
             }
             _ => {
                 unreachable!("Invalid memory access");
@@ -76,7 +76,7 @@ impl Iterator for InterruptController {
                     0x4 => Some(IntSource::TIMER),
                     0x8 => Some(IntSource::SERIAL),
                     0x10 => Some(IntSource::JOYPAD),
-                    _ => unreachable!("No"),
+                    _ => unreachable!("No: int flag: {} int en: {}", self.int_f, self.int_en),
                 };
             }
 

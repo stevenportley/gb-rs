@@ -160,6 +160,7 @@ impl PPU {
             }
         }
     }
+
     fn bkgr_start_addr(&self) -> usize {
         if self.lcdc & 0x8 == 0 {
             return 0x9800;

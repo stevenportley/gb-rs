@@ -227,9 +227,6 @@ mod tests {
         assert_eq!(oams[0].tile_idx(), 0x00);
         assert_eq!(oams[1].tile_idx(), 0x10);
         assert_eq!(oams[2].tile_idx(), 0x20);
-
-
-
     }
 
     fn get_test_tiles() -> [Tile<'static>; 4] {
