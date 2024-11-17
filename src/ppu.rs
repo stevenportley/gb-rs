@@ -250,7 +250,7 @@ impl PPU {
     }
     */
 
-    pub fn run_one(&mut self) -> (u8, Option<IntSource>) {
+    pub fn run_one(&mut self) -> (i32, Option<IntSource>) {
         match self.mode {
             PpuMode::OAMSCAN => {
                 self.mode = PpuMode::DRAW;
@@ -327,33 +327,6 @@ impl PPU {
 
         }
 
-    }
-
-    pub fn tick(&mut self) -> Option<IntSource> {
-        if self.curr_x == 113 {
-            self.curr_x = 0;
-            if self.ly == 153 {
-                self.ly = 0;
-                return None;
-            } else {
-                self.ly += 1;
-            }
-        } else {
-            self.curr_x += 1;
-        }
-
-        if self.ly >= 144 {
-            self.mode = PpuMode::VBLANK;
-            return Some(IntSource::VBLANK);
-        } else if self.curr_x < 20 {
-            self.mode = PpuMode::OAMSCAN;
-        } else if self.curr_x >= 94 {
-            self.mode = PpuMode::HBLANK;
-        } else {
-            self.mode = PpuMode::DRAW;
-        }
-
-        return None;
     }
 
     fn get_stat(&self) -> u8 {

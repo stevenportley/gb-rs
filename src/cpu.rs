@@ -39,7 +39,7 @@ pub struct Cpu {
 
     ime: bool,
 
-    sleep: bool,
+    pub sleep: bool,
     pub bus: Bus,
 }
 
@@ -1898,24 +1898,15 @@ impl Cpu {
         }
     }
 
-    pub fn run_one(&mut self) {
+    pub fn run_one(&mut self) -> usize {
         // If we are halted waiting for next interrupt,
         // keep the timer running
         if self.sleep {
-            let mut cnt = 0;
-            while !self.bus.int_controller.pending() {
-                self.bus.ppu.tick();
-                if self.bus.timer.tick() {
-                    self.bus.int_controller.interrupt(IntSource::TIMER);
-                }
-                if cnt == 100 {
-                    return;
-                }
-                cnt += 1;
+            if self.bus.int_controller.pending() {
+                self.sleep = false;
             }
 
-            self.sleep = false;
-            return;
+            return 0;
         }
 
         let mut clks = 0;
@@ -1928,18 +1919,7 @@ impl Cpu {
         
         let next_instr = self.next_instr();
         clks += self.execute_instr(next_instr);
-
-
-        for _ in 0..clks {
-            if let Some(intr) = self.bus.ppu.tick() {
-                self.bus.int_controller.interrupt(intr)
-            }
-
-            if self.bus.timer.tick() {
-                self.bus.int_controller.interrupt(IntSource::TIMER);
-            }
-        }
-
+        clks
     }
 
     pub fn handle_interrupt(&mut self, int_source: IntSource) -> usize {
@@ -1957,111 +1937,4 @@ impl Cpu {
         self.bus.int_controller.interrupt_clear(int_source);
         return 5;
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs::read;
-    use std::path::Path;
-    use std::time;
-
-    fn rom_test(rom_path: &Path) {
-        let rom = read(rom_path).expect("Unable to load test rom: {rom_path}");
-
-        let mut cpu = Cpu::new(rom.as_slice()).expect("Unable to load test rom");
-
-        let timeout = time::Instant::now() + time::Duration::from_secs(5);
-
-        let mut cnt = 0;
-
-        while !cpu.is_passed() {
-            cpu.run_one();
-
-            if cnt == 1000 {
-                // Timeout check
-                assert!(time::Instant::now() < timeout);
-                cnt = 0;
-            }
-
-            cnt += 1;
-        }
-    }
-
-    #[test]
-    fn rom1_special() {
-        rom_test(Path::new("roms/testrom-cpuinstr-01.gb"));
-    }
-
-    #[test]
-    fn rom2_int() {
-        rom_test(Path::new("roms/testrom-cpuinstr-02.gb"));
-    }
-
-    #[test]
-    fn rom3_op_sp_hl() {
-        rom_test(Path::new("roms/testrom-cpuinstr-03.gb"));
-    }
-
-    #[test]
-    fn rom4_op_r_imm() {
-        rom_test(Path::new("roms/testrom-cpuinstr-04.gb"));
-    }
-
-    #[test]
-    fn rom5_op_rp() {
-        rom_test(Path::new("roms/testrom-cpuinstr-05.gb"));
-    }
-
-    #[test]
-    fn rom6_ld_r_r() {
-        rom_test(Path::new("roms/testrom-cpuinstr-06.gb"));
-    }
-
-    #[test]
-    fn rom7_jr_jp_call_ret_rst() {
-        rom_test(Path::new("roms/testrom-cpuinstr-07.gb"));
-    }
-
-    #[test]
-    fn rom8_misc_instr() {
-        rom_test(Path::new("roms/testrom-cpuinstr-08.gb"));
-    }
-
-    #[test]
-    fn rom9_op_r_r() {
-        rom_test(Path::new("roms/testrom-cpuinstr-09.gb"));
-    }
-
-    #[test]
-    fn rom10_op_r_r() {
-        rom_test(Path::new("roms/testrom-cpuinstr-10.gb"));
-    }
-
-    #[test]
-    fn rom11_op_a_hl() {
-        rom_test(Path::new("roms/testrom-cpuinstr-11.gb"));
-    }
-
-    #[test]
-    fn instr_timing() {
-        rom_test(Path::new("roms/instr_timing.gb"));
-    }
-
-    /*
-     * We are going to continue to fail this
-     * test because are not cycle accurate.
-     * We execute instructions in once instant
-     * and iterate the rest of the system
-     * based on the cycle count of that instruction,
-     * which is technically not correct but it should
-     * not matter for most games.
-     *
-     * See: https://www.reddit.com/r/EmuDev/comments/jzm8xx/are_memory_access_timings_important_for_medium/
-     *
-    #[test]
-    fn mem_timing() {
-        rom_test(Path::new("roms/mem_timing.gb"));
-    }
-    */
 }

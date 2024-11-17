@@ -1,4 +1,4 @@
-use gb_rs::cpu::Cpu;
+use gb_rs::gb::GbRs;
 use winit::window::Fullscreen;
 use std::env;
 use std::io;
@@ -33,14 +33,14 @@ fn main() -> io::Result<()> {
     };
 
     let rom = std::fs::read(path).expect("Unable to load rom file");
-    let mut cpu = Cpu::new(rom.as_slice())?;
+    let mut cpu = GbRs::new(rom.as_slice())?;
 
     gui(cpu);
 
     Ok(())
 }
 
-fn gui(mut gb: Cpu) {
+fn gui(mut gb: GbRs) {
     let event_loop = EventLoop::new();
     let mut input = WinitInputHelper::new();
     let window = {
@@ -76,7 +76,7 @@ fn gui(mut gb: Cpu) {
 
             std::thread::sleep_ms(1);
 
-            let frame = gb.bus.ppu.get_frame2();
+            let frame = gb.cpu.bus.ppu.get_frame2();
             pixels.frame_mut()[..(8*32)*(4*8*32)].copy_from_slice(&frame);
 
             gui.prepare(&window).expect("gui.prepare() failed");
