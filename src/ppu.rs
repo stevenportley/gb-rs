@@ -285,15 +285,14 @@ impl PPU {
             }
 
             PpuMode::HBLANK => {
+                self.ly += 1;
 
                 // Are we entering VBLANK?
                 if self.ly == 143 {
-                    self.ly += 1;
                     self.mode = PpuMode::VBLANK;
                     self.r_cyc = 114 - over_cycles;
                     return Some(IntSource::VBLANK);
                 } else {
-                    self.ly += 1;
                     self.mode = PpuMode::OAMSCAN;
                     self.r_cyc = 20 - over_cycles;
 

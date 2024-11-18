@@ -70,7 +70,7 @@ fn gui(mut gb: GbRs) {
 
         // Draw the current frame
         if let Event::RedrawRequested(_) = event {
-            for _ in 0..1000 {
+            for _ in 0..10000 {
                 gb.run_one();
             }
 

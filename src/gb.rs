@@ -16,7 +16,6 @@ impl GbRs {
 
     pub fn run_one(&mut self) {
 
-
         let cycles = self.cpu.run_one();
 
         let maybe_int = self.cpu.bus.ppu.run(cycles as i32);
@@ -28,7 +27,7 @@ impl GbRs {
         }
 
         if let Some(ppu_int) = maybe_int {
-            self.cpu.bus.int_controller.interrupt(dbg!(ppu_int))
+            self.cpu.bus.int_controller.interrupt(ppu_int)
         }
         
     }
