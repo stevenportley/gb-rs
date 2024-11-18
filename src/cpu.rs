@@ -1906,7 +1906,7 @@ impl Cpu {
                 self.sleep = false;
             }
 
-            return 0;
+            return 1;
         }
 
         let mut clks = 0;

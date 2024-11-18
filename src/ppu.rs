@@ -35,6 +35,7 @@ pub struct PPU {
     wx: u8,
     curr_x: u8,
     mode: PpuMode,
+    r_cyc: i32,
     frame: [[u8; 160]; 144]
 }
 
@@ -57,6 +58,7 @@ impl PPU {
             wx: 0,
             curr_x: 0,
             mode: PpuMode::OAMSCAN,
+            r_cyc: 20,
             frame: [[0; 160]; 144],
         }
     }
@@ -250,6 +252,87 @@ impl PPU {
     }
     */
 
+    pub fn run(&mut self, cycles: i32) -> Option<IntSource> {
+
+        if cycles < self.r_cyc {
+            self.r_cyc = self.r_cyc - cycles;
+            return None
+        }
+
+        let over_cycles = cycles - self.r_cyc;
+
+        match self.mode {
+            PpuMode::OAMSCAN => {
+                    // 43 is the minimum, real should be
+                    // based on PPU / OAM state
+                    self.mode = PpuMode::DRAW;
+                    self.r_cyc = 43 - over_cycles;
+            }
+
+            PpuMode::DRAW => {
+                // Exiting DRAW state
+                // TODO: update line
+                // TODO: Incorproate SCX
+
+                // TODO: Use actual timing, not just 51
+                self.mode = PpuMode::HBLANK;
+                self.r_cyc = 51 - over_cycles;
+
+                // Check for HBlank interrupt
+                if (self.stat & 0x8) != 0 {
+                    return Some(IntSource::LCD);
+                } 
+            }
+
+            PpuMode::HBLANK => {
+
+                // Are we entering VBLANK?
+                if self.ly == 143 {
+                    self.ly += 1;
+                    self.mode = PpuMode::VBLANK;
+                    self.r_cyc = 114 - over_cycles;
+                    return Some(IntSource::VBLANK);
+                } else {
+                    self.ly += 1;
+                    self.mode = PpuMode::OAMSCAN;
+                    self.r_cyc = 20 - over_cycles;
+
+                    // Check for LYC int
+                    if (self.stat & 0x40) != 0 {
+                        if self.ly == self.lyc {
+                            return  Some(IntSource::LCD);
+                        }
+                    }
+
+                    // Check for OAM scan interrupt
+                    if (self.stat & 0x20) != 0 {
+                        return Some(IntSource::LCD);
+                    }                 
+                }
+            }
+
+            PpuMode::VBLANK => {
+                if self.ly == 153 {
+                    // Go back OAM Scan and restart!
+                    self.mode = PpuMode::OAMSCAN;
+                    self.r_cyc = 20 - over_cycles;
+                    self.ly = 0;
+
+                    // Check for OAM scan interrupt
+                    if (self.stat & 0x20) != 0 {
+                        return Some(IntSource::LCD);
+                    }                 
+                } else {
+                    self.ly += 1;
+                    self.r_cyc = 114 - over_cycles;
+                }
+            }
+        }
+
+        None
+    }
+
+    /*
     pub fn run_one(&mut self) -> (i32, Option<IntSource>) {
         match self.mode {
             PpuMode::OAMSCAN => {
@@ -328,6 +411,7 @@ impl PPU {
         }
 
     }
+*/
 
     fn get_stat(&self) -> u8 {
         let base = self.stat & !0x7;

@@ -4,7 +4,6 @@ use std::io;
 
 pub struct GbRs {
     pub cpu: Cpu,
-    clk_cnter: i32,
 }
 
 
@@ -12,32 +11,24 @@ impl GbRs {
     pub fn new<T: io::Read>(rom: T) -> io::Result<Self> {
         Ok(Self {
             cpu: Cpu::new(rom)?,
-            clk_cnter: 0,
         })
     }
 
-
     pub fn run_one(&mut self) {
 
-        let (ppu_cycles, maybe_int) = self.cpu.bus.ppu.run_one();
 
-        self.clk_cnter += ppu_cycles;
+        let cycles = self.cpu.run_one();
 
-        while self.clk_cnter >= 0 {
-            let cpu_cycles = self.cpu.run_one();
+        let maybe_int = self.cpu.bus.ppu.run(cycles as i32);
 
-            for _ in 0..cpu_cycles {
-
-                if self.cpu.bus.timer.tick() {
-                    self.cpu.bus.int_controller.interrupt(IntSource::TIMER);
-                }
+        for _ in 0..cycles {
+            if self.cpu.bus.timer.tick() {
+                self.cpu.bus.int_controller.interrupt(IntSource::TIMER);
             }
-
-            self.clk_cnter -= cpu_cycles as i32;
         }
 
         if let Some(ppu_int) = maybe_int {
-            self.cpu.bus.int_controller.interrupt(ppu_int)
+            self.cpu.bus.int_controller.interrupt(dbg!(ppu_int))
         }
         
     }
