@@ -40,7 +40,6 @@ pub struct PPU {
     mode: PpuMode,
     r_cyc: i32,
     background: Frame,
-    frame: [[u8; 160]; 144],
 }
 
 impl PPU {
@@ -64,7 +63,6 @@ impl PPU {
             mode: PpuMode::OAMSCAN,
             r_cyc: 20,
             background: Frame::new(),
-            frame: [[0; 160]; 144],
         }
     }
 

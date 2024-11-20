@@ -41,7 +41,7 @@ impl GbRs {
         self.total_time += Instant::now() - start;
         self.n_runs += 100;
 
-        if self.n_runs % 100000 == 0 {
+        if self.n_runs % 1000000 == 0 {
             println!("Time consumed: {:?}", self.total_time);
             println!(
                 "Time per cycle: {:?}",
