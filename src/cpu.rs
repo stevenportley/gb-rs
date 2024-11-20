@@ -1916,7 +1916,7 @@ impl Cpu {
                 clks += self.handle_interrupt(interrupt);
             }
         }
-        
+
         let next_instr = self.next_instr();
         clks += self.execute_instr(next_instr);
         clks
@@ -1931,7 +1931,7 @@ impl Cpu {
             IntSource::LCD => 0x48,
             IntSource::TIMER => 0x50,
             IntSource::SERIAL => 0x58,
-            IntSource::JOYPAD => 0x60
+            IntSource::JOYPAD => 0x60,
         };
 
         self.bus.int_controller.interrupt_clear(int_source);

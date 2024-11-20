@@ -1,37 +1,54 @@
 use crate::cpu::Cpu;
 use crate::interrupts::IntSource;
 use std::io;
+use std::time::{Duration, Instant};
 
 pub struct GbRs {
     pub cpu: Cpu,
+    total_time: Duration,
+    n_runs: u64,
 }
-
 
 impl GbRs {
     pub fn new<T: io::Read>(rom: T) -> io::Result<Self> {
         Ok(Self {
             cpu: Cpu::new(rom)?,
+            total_time: Duration::new(0, 0),
+            n_runs: 0,
         })
     }
 
     pub fn run_one(&mut self) {
+        let start = Instant::now();
 
-        let cycles = self.cpu.run_one();
+        for _ in 0..100 {
 
-        let maybe_int = self.cpu.bus.ppu.run(cycles as i32);
+            let cycles = self.cpu.run_one();
 
-        for _ in 0..cycles {
-            if self.cpu.bus.timer.tick() {
-                self.cpu.bus.int_controller.interrupt(IntSource::TIMER);
+            let maybe_int = self.cpu.bus.ppu.run(cycles as i32);
+
+            for _ in 0..cycles {
+                if self.cpu.bus.timer.tick() {
+                    self.cpu.bus.int_controller.interrupt(IntSource::TIMER);
+                }
+            }
+
+            if let Some(ppu_int) = maybe_int {
+                self.cpu.bus.int_controller.interrupt(ppu_int)
             }
         }
 
-        if let Some(ppu_int) = maybe_int {
-            self.cpu.bus.int_controller.interrupt(ppu_int)
-        }
-        
-    }
+        self.total_time += Instant::now() - start;
+        self.n_runs += 100;
 
+        if self.n_runs % 100000 == 0 {
+            println!("Time consumed: {:?}", self.total_time);
+            println!(
+                "Time per cycle: {:?}",
+                self.total_time.div_f64(self.n_runs as f64)
+            );
+        }
+    }
 }
 
 #[cfg(test)]

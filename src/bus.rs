@@ -94,7 +94,6 @@ impl Bus {
             }
             //PPU control registers
             0xFF40..=0xFF4B => {
-
                 if addr == 0xFF46 {
                     let mut src = val as u16 * 0x100;
                     for dst in 0xFE00..=0xFE9F {

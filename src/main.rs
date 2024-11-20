@@ -1,7 +1,7 @@
 use gb_rs::gb::GbRs;
-use winit::window::Fullscreen;
 use std::env;
 use std::io;
+use winit::window::Fullscreen;
 
 mod gui;
 
@@ -70,14 +70,14 @@ fn gui(mut gb: GbRs) {
 
         // Draw the current frame
         if let Event::RedrawRequested(_) = event {
-            for _ in 0..10000 {
+            for _ in 0..100 {
                 gb.run_one();
             }
 
             std::thread::sleep_ms(1);
 
-            let frame = gb.cpu.bus.ppu.get_frame2();
-            pixels.frame_mut()[..(8*32)*(4*8*32)].copy_from_slice(&frame);
+            let frame = gb.cpu.bus.ppu.get_frame3();
+            pixels.frame_mut()[..(8 * 32) * (4 * 8 * 32)].copy_from_slice(&frame);
 
             gui.prepare(&window).expect("gui.prepare() failed");
 
@@ -111,7 +111,6 @@ fn gui(mut gb: GbRs) {
                 }
             }
             */
-
         }
 
         // Handle input events
@@ -132,6 +131,5 @@ fn gui(mut gb: GbRs) {
             // Update internal state and request a redraw
             window.request_redraw();
         }
-
     });
 }

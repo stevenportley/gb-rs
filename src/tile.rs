@@ -83,7 +83,6 @@ impl<'a> Iterator for TileRenderer<'a> {
 
         Some(pixel_indices)
     }
-
 }
 
 pub fn get_background(tiles: &[Tile]) -> [[u8; 256]; 256] {

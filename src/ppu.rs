@@ -1,12 +1,15 @@
 use crate::interrupts::IntSource;
-use crate::tile::{get_background, Tile, TileRenderer};
 use crate::oam::OamMap;
+use crate::tile::{get_background, Tile, TileRenderer};
 
 // The number of tiles in all of VRAM
 pub const NTILES: usize = 384;
 
 // The whole background
 pub const NUM_BACKGROUND_TILES: usize = 32 * 32;
+
+const FRAME_WIDTH: usize = 256;
+const FRAME_HEIGHT: usize = 256;
 
 const VRAM_LEN: usize = 0x2000;
 const OAM_LEN: usize = 0xA0;
@@ -36,7 +39,8 @@ pub struct PPU {
     curr_x: u8,
     mode: PpuMode,
     r_cyc: i32,
-    frame: [[u8; 160]; 144]
+    background: Frame,
+    frame: [[u8; 160]; 144],
 }
 
 impl PPU {
@@ -59,6 +63,7 @@ impl PPU {
             curr_x: 0,
             mode: PpuMode::OAMSCAN,
             r_cyc: 20,
+            background: Frame::new(),
             frame: [[0; 160]; 144],
         }
     }
@@ -163,6 +168,31 @@ impl PPU {
         }
     }
 
+    fn render_bg_line(&self, ly: u8) -> [u8; FRAME_WIDTH] {
+        // The number of tiles in a horizontal line
+        const N_TILES_IN_LINE: usize = FRAME_WIDTH / 8;
+
+        // The tile offset corresponding to the begining of this line
+        let y_tile_offset = (ly as usize / 8) * N_TILES_IN_LINE;
+
+        // vertical offset inside the tile
+        // e.g. if we are drawing line 10, this should be 2
+        // since we are drawing the third line inside the tile
+        let vert_line_tile_offset: u8 = (ly % 8).try_into().unwrap();
+
+        let tiles = self.get_background();
+
+        let mut pixels = [0; FRAME_WIDTH];
+        let mut i = 0;
+
+        for (_, eight_pixels) in pixels.chunks_exact_mut(8).enumerate() {
+            eight_pixels.copy_from_slice(&tiles[y_tile_offset + i].pixel_buf(vert_line_tile_offset));
+            i += 1;
+        }
+
+        pixels
+    }
+
     fn bkgr_start_addr(&self) -> usize {
         if self.lcdc & 0x8 == 0 {
             return 0x9800;
@@ -197,9 +227,12 @@ impl PPU {
         tiles
     }
 
-    pub fn get_frame2(&self) -> [u8; (8*32) * (4*8*32)] {
+    pub fn get_frame3(&self) -> [u8; (8 * 32) * (4 * 8 * 32)] {
+        self.background.to_rgba()
+    }
 
-        let mut pixels = [0; (8*32)*(4*8*32)];
+    pub fn get_frame2(&self) -> [u8; (8 * 32) * (4 * 8 * 32)] {
+        let mut pixels = [0; (8 * 32) * (4 * 8 * 32)];
         let bkgd_tiles = self.get_background();
 
         let mut bkgnd = crate::tile::get_background(&bkgd_tiles);
@@ -222,11 +255,11 @@ impl PPU {
 
     //TODO: This function isn't going to work right,
     //      need to replace with an actual line renderer
-    pub fn get_frame(&self) -> [u8; (8*32) * (4*8*32)] {
+    pub fn get_frame(&self) -> [u8; (8 * 32) * (4 * 8 * 32)] {
         let bck_gnd = self.get_background();
         let mut tile_renderer = TileRenderer::from_tiles(&bck_gnd, 32 * 8);
 
-        let mut pixels = [0; (8*32)*(4*8*32)];
+        let mut pixels = [0; (8 * 32) * (4 * 8 * 32)];
 
         for (_, eight_pixels) in pixels.chunks_exact_mut(4 * 8).enumerate() {
             if let Some(new_pixels) = tile_renderer.next() {
@@ -240,39 +273,28 @@ impl PPU {
         pixels
     }
 
-    // Get necessary information from PPU registers
-    //  - SCX, SCY, etc.
-    // Find first 10 suitable OAM entries (check Y coordinate)
-    // Render (flipping, priority, etc) along with background / window
-
-    /*
-    pub fn get_line(&mut self) {
-
-
-    }
-    */
-
     pub fn run(&mut self, cycles: i32) -> Option<IntSource> {
-
         if cycles < self.r_cyc {
             self.r_cyc = self.r_cyc - cycles;
-            return None
+            return None;
         }
 
         let over_cycles = cycles - self.r_cyc;
 
         match self.mode {
             PpuMode::OAMSCAN => {
-                    // 43 is the minimum, real should be
-                    // based on PPU / OAM state
-                    self.mode = PpuMode::DRAW;
-                    self.r_cyc = 43 - over_cycles;
+                // 43 is the minimum, real should be
+                // based on PPU / OAM state
+                self.mode = PpuMode::DRAW;
+                self.r_cyc = 43 - over_cycles;
             }
 
             PpuMode::DRAW => {
                 // Exiting DRAW state
                 // TODO: update line
                 // TODO: Incorproate SCX
+                let bg_line = self.render_bg_line(self.ly);
+                self.background.buf[self.ly as usize].copy_from_slice(&bg_line);
 
                 // TODO: Use actual timing, not just 51
                 self.mode = PpuMode::HBLANK;
@@ -281,7 +303,7 @@ impl PPU {
                 // Check for HBlank interrupt
                 if (self.stat & 0x8) != 0 {
                     return Some(IntSource::LCD);
-                } 
+                }
             }
 
             PpuMode::HBLANK => {
@@ -299,14 +321,14 @@ impl PPU {
                     // Check for LYC int
                     if (self.stat & 0x40) != 0 {
                         if self.ly == self.lyc {
-                            return  Some(IntSource::LCD);
+                            return Some(IntSource::LCD);
                         }
                     }
 
                     // Check for OAM scan interrupt
                     if (self.stat & 0x20) != 0 {
                         return Some(IntSource::LCD);
-                    }                 
+                    }
                 }
             }
 
@@ -320,7 +342,7 @@ impl PPU {
                     // Check for OAM scan interrupt
                     if (self.stat & 0x20) != 0 {
                         return Some(IntSource::LCD);
-                    }                 
+                    }
                 } else {
                     self.ly += 1;
                     self.r_cyc = 114 - over_cycles;
@@ -331,90 +353,36 @@ impl PPU {
         None
     }
 
-    /*
-    pub fn run_one(&mut self) -> (i32, Option<IntSource>) {
-        match self.mode {
-            PpuMode::OAMSCAN => {
-                self.mode = PpuMode::DRAW;
-                // No interrupts can trigger 
-                // when moving to DRAW
-                return (20, None)
-            }
-            PpuMode::DRAW => {
-                self.mode = PpuMode::HBLANK;
-
-                // Update a line
-                //TODO: Incorproate SCX
-                //let adjusted_ly = self.ly.wrapping_add(self.scy);
-                
-
-                // Check for HBLANK interrupt
-                // We are not considering 
-                // LCD mode 1 (VLBLANK) interrupt
-                // because is already has it's own
-                // interupt? Why would nintendo 
-                // do this?
-                if (self.stat & 0x8) != 0 {
-                    //TODO: Update this with actual
-                    //      LCD timing (including delay)
-                    //      rather than just using the minimum
-                    return (43, Some(IntSource::LCD))
-                } else {
-                    return (43, None)
-                }
-            }
-
-            PpuMode::HBLANK => {
-
-                if self.ly == 143 {
-                    self.ly += 1;
-                    self.mode = PpuMode::VBLANK;
-                    return (51, Some(IntSource::VBLANK));
-                } else {
-                    self.ly += 1;
-                    self.mode = PpuMode::OAMSCAN;
-
-                    // Check for LYC int
-                    if (self.stat & 0x40) != 0 {
-                        if self.ly == self.lyc {
-                            return (51, Some(IntSource::LCD));
-                        }
-                    }
-
-                    // Check for OAM scan interrupt
-                    if (self.stat & 0x20) != 0 {
-                        return (51, Some(IntSource::LCD));
-                    } else {
-                        return (51, None);
-                    }
-                }
-            }
-
-            PpuMode::VBLANK => {
-                if self.ly == 153 {
-                    // Go back OAM Scan and restart!
-                    self.mode = PpuMode::OAMSCAN;
-                    self.ly = 0;
-                    // Check for OAM scan interrupt
-                    if (self.stat & 0x20) != 0 {
-                        return (114, Some(IntSource::LCD));
-                    } else {
-                        return (114, None);
-                    }
-                } else {
-                    self.ly += 1;
-                    return (114, None);
-                }
-            }
-
-        }
-
-    }
-*/
-
     fn get_stat(&self) -> u8 {
         let base = self.stat & !0x7;
-        return base | self.mode as u8 | 
-            if self.ly == self.lyc { 0x6 } else { 0 };
+        return base | self.mode as u8 | if self.ly == self.lyc { 0x6 } else { 0 };
     }
+}
+
+pub struct Frame {
+    pub buf: [[u8; FRAME_WIDTH]; FRAME_HEIGHT],
+}
+
+impl Frame {
+    pub fn new() -> Self {
+        Frame {
+            buf: [[0; FRAME_WIDTH]; FRAME_HEIGHT],
+        }
+    }
+
+    pub fn to_rgba(&self) -> [u8; 4 * FRAME_WIDTH * FRAME_HEIGHT] {
+
+        let mut pixels = [0; 4 * FRAME_WIDTH * FRAME_HEIGHT];
+
+        let mut frame_iter = self.buf.into_iter().flatten();
+
+        for (_, one_pixel) in pixels.chunks_exact_mut(4).enumerate() {
+            if let Some(new_pixel) = frame_iter.next() {
+                one_pixel.copy_from_slice(&PPU::palette_to_rgba(new_pixel));
+            }
+        }
+
+        pixels
+    }
+
 }
