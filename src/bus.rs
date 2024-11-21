@@ -43,7 +43,8 @@ impl Bus {
     pub fn write(&mut self, addr: u16, val: u8) {
         match addr {
             0..=0x3FFF => {
-                self.rom[addr as usize] = val;
+                println!("Ignoring write to cartridge")
+                //self.rom[addr as usize] = val;
             }
             0x4000..=0x7FFF => {
                 self.mapped_rom[addr as usize - 0x4000] = val;
@@ -61,7 +62,7 @@ impl Bus {
                 self.mapped_wram[addr as usize - 0xD000] = val;
             }
             0xE000..=0xFDFF => {
-                println!("Attempting to write to echo ram! {addr}, {val}");
+                unreachable!("Attempting to write to echo ram! {addr}, {val}");
             }
             0xFE00..=0xFE9F => {
                 //OAM
