@@ -1227,22 +1227,20 @@ impl<B: Bus> Cpu<B> {
                 op1: None,
                 op2: None,
             } => {
-                /*
                 if self.ime {
-                    self.sleep = true;
-                }
-                */
-                self.sleep = true;
-                return 1;
-                /*
-                if !self.bus.int_controller.pending() {
                     self.sleep = true;
                     return 1;
                 }
-                */
+
+                if !self.bus.interrupt_pending() {
+                    self.sleep = true;
+                    return 1;
+                }
+
 
                 //TODO: Handle HALT bug
-                //assert!(false);
+                assert!(false);
+                return 1;
             }
             Instr {
                 opcode: Opcode::ADD,
@@ -1902,21 +1900,15 @@ impl<B: Bus> Cpu<B> {
 
     pub fn run_one(&mut self) -> usize {
 
-
-        //TODO: What happens if we disable IME
-        //      then run HALT instruction! Halt bug?
+        // Review this and make sure all four conditions are handled correctly
+        // with IME and HALT
         if self.sleep {
-            if let Some(interrupt) = self.bus.query_interrupt() {
+            if self.bus.interrupt_pending() {
                 self.sleep = false;
-                let cycles = self.handle_interrupt(interrupt);
-                self.bus.run_cycles(cycles as u16);
-                return cycles;
-            } else {
-                // If the CPU is halted waiting for next interrupt
-                // keep the rest of the system running
-                self.bus.run_cycles(1);
-                return 1;
             }
+
+            self.bus.run_cycles(1);
+            return 1;
         }
 
         if self.ime {

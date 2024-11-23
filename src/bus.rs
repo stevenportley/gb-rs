@@ -14,6 +14,8 @@ pub trait Bus {
     fn clear_interrupt(&mut self, interrupt: IntSource);
     // TODO: Remove this API once we have a better one for serial
     fn is_passed(&self) -> bool;
+    // TODO: Remove this, without it HALT breaks??
+    fn interrupt_pending(&self) -> bool;
 }
 
 
@@ -238,5 +240,11 @@ impl Bus for StaticBus {
     fn is_passed(&self) -> bool {
         self.is_passed()
     }
+
+    fn interrupt_pending(&self) -> bool {
+        self.int_controller.pending()
+    }
+
+
 
 }

@@ -291,6 +291,7 @@ impl PPU {
                 // Exiting DRAW state
                 // TODO: update line
                 // TODO: Incorproate SCX
+
                 let bg_line = self.render_bg_line(self.ly);
                 self.background.buf[self.ly as usize].copy_from_slice(&bg_line);
 

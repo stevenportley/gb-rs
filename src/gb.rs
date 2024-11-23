@@ -20,10 +20,6 @@ impl GbRs {
     }
 
     pub fn run_one(&mut self) {
-        for _ in 0..100 {
-            self.cpu.run_one();
-        }
-        /*
         let start = Instant::now();
 
         for _ in 0..100 {
@@ -40,7 +36,6 @@ impl GbRs {
                 self.total_time.div_f64(self.n_runs as f64)
             );
         }
-        */
     }
 }
 
