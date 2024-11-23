@@ -70,11 +70,11 @@ fn gui(mut gb: GbRs) {
 
         // Draw the current frame
         if let Event::RedrawRequested(_) = event {
-            for _ in 0..100 {
+            for _ in 0..10000 {
                 gb.run_one();
             }
 
-            std::thread::sleep_ms(1);
+            //std::thread::sleep_ms(1);
 
             let frame = gb.cpu.bus.ppu.get_frame3();
             pixels.frame_mut()[..(8 * 32) * (4 * 8 * 32)].copy_from_slice(&frame);

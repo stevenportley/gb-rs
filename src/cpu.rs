@@ -1227,10 +1227,12 @@ impl<B: Bus> Cpu<B> {
                 op1: None,
                 op2: None,
             } => {
+                /*
                 if self.ime {
                     self.sleep = true;
                 }
-
+                */
+                self.sleep = true;
                 return 1;
                 /*
                 if !self.bus.int_controller.pending() {
