@@ -294,6 +294,16 @@ impl PPU {
                 let bg_line = self.render_bg_line(self.ly);
                 self.background.buf[self.ly as usize].copy_from_slice(&bg_line);
 
+                let oam_map = OamMap::from_mem(&self.oam);
+
+                let sprite_tiles: [Tile; 256] = core::array::from_fn(|tile_index| {
+                    let index = tile_index * 16;
+                    return Tile::from_bytes(&self.vram[index..index + 16]);
+                });
+
+                oam_map.render_line(&mut self.background.buf[self.ly as usize][..160], &sprite_tiles, self.ly, false);
+
+
                 // TODO: Use actual timing, not just 51
                 self.mode = PpuMode::HBLANK;
                 self.r_cyc = 51 - over_cycles;
