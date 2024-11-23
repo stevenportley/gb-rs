@@ -2,9 +2,10 @@ use crate::cpu::Cpu;
 use crate::interrupts::IntSource;
 use std::io;
 use std::time::{Duration, Instant};
+use crate::bus::StaticBus;
 
 pub struct GbRs {
-    pub cpu: Cpu,
+    pub cpu: Cpu<StaticBus>,
     total_time: Duration,
     n_runs: u64,
 }
@@ -12,7 +13,7 @@ pub struct GbRs {
 impl GbRs {
     pub fn new<T: io::Read>(rom: T) -> io::Result<Self> {
         Ok(Self {
-            cpu: Cpu::new(rom)?,
+            cpu: Cpu::new(StaticBus::new(rom)?),
             total_time: Duration::new(0, 0),
             n_runs: 0,
         })
@@ -22,20 +23,7 @@ impl GbRs {
         let start = Instant::now();
 
         for _ in 0..100 {
-
-            let cycles = self.cpu.run_one();
-
-            let maybe_int = self.cpu.bus.ppu.run(cycles as i32);
-
-            for _ in 0..cycles {
-                if self.cpu.bus.timer.tick() {
-                    self.cpu.bus.int_controller.interrupt(IntSource::TIMER);
-                }
-            }
-
-            if let Some(ppu_int) = maybe_int {
-                self.cpu.bus.int_controller.interrupt(ppu_int)
-            }
+            self.cpu.run_one();
         }
 
         self.total_time += Instant::now() - start;

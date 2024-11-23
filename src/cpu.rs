@@ -1,5 +1,5 @@
 use crate::{bus::Bus, interrupts::IntSource};
-use std::{io, thread::sleep, time::Duration};
+use std::io;
 
 fn does_bit3_overflow(a: u8, b: u8) -> bool {
     let a = a & 0xF;
@@ -21,7 +21,7 @@ fn does_bit3_borrow(a: u8, b: u8) -> bool {
     return b > a;
 }
 
-pub struct Cpu {
+pub struct Cpu<B: Bus> {
     a: u8,
     b: u8,
     c: u8,
@@ -40,7 +40,7 @@ pub struct Cpu {
     ime: bool,
 
     pub sleep: bool,
-    pub bus: Bus,
+    pub bus: B,
 }
 
 #[derive(Debug)]
@@ -126,8 +126,8 @@ pub struct Instr {
     op2: Option<Operands>,
 }
 
-impl Cpu {
-    pub fn new<T: io::Read>(rom: T) -> io::Result<Self> {
+impl<B: Bus> Cpu<B> {
+    pub fn new(bus: B) -> Self {
         let mut cpu = Cpu {
             a: 0x01,
             b: 0x00,
@@ -144,12 +144,12 @@ impl Cpu {
             z_f: true,
             ime: false,
             sleep: false,
-            bus: Bus::new(rom)?,
+            bus,
         };
 
         // Temporary to make LCD work with test ROMs
         cpu.bus.write(0xFF44, 0x90);
-        Ok(cpu)
+        cpu
     }
 
     fn get_f(&self) -> u8 {
@@ -714,7 +714,7 @@ impl Cpu {
 
         if opcode == 0xCB {
             let next_byte = self.load_byte();
-            return Cpu::cb_prefix_decode(next_byte);
+            return Self::cb_prefix_decode(next_byte);
         }
 
         let lower_four = opcode & 0xF;
@@ -1229,18 +1229,18 @@ impl Cpu {
             } => {
                 if self.ime {
                     self.sleep = true;
-                    return 1;
                 }
 
+                return 1;
+                /*
                 if !self.bus.int_controller.pending() {
                     self.sleep = true;
                     return 1;
                 }
+                */
 
-                //HALT BUG!
-                assert!(false);
-
-                return 1;
+                //TODO: Handle HALT bug
+                //assert!(false);
             }
             Instr {
                 opcode: Opcode::ADD,
@@ -1899,27 +1899,36 @@ impl Cpu {
     }
 
     pub fn run_one(&mut self) -> usize {
-        // If we are halted waiting for next interrupt,
-        // keep the timer running
-        if self.sleep {
-            if self.bus.int_controller.pending() {
-                self.sleep = false;
-            }
 
-            return 1;
+
+        //TODO: What happens if we disable IME
+        //      then run HALT instruction! Halt bug?
+        if self.sleep {
+            if let Some(interrupt) = self.bus.query_interrupt() {
+                self.sleep = false;
+                let cycles = self.handle_interrupt(interrupt);
+                self.bus.run_cycles(cycles as u16);
+                return cycles;
+            } else {
+                // If the CPU is halted waiting for next interrupt
+                // keep the rest of the system running
+                self.bus.run_cycles(1);
+                return 1;
+            }
         }
 
-        let mut clks = 0;
-
         if self.ime {
-            if let Some(interrupt) = self.bus.int_controller.next() {
-                clks += self.handle_interrupt(interrupt);
+            if let Some(interrupt) = self.bus.query_interrupt() {
+                let cycles = self.handle_interrupt(interrupt);
+                self.bus.run_cycles(cycles as u16);
+                return cycles
             }
         }
 
         let next_instr = self.next_instr();
-        clks += self.execute_instr(next_instr);
-        clks
+        let cycles = self.execute_instr(next_instr);
+        self.bus.run_cycles(cycles as u16);
+        cycles
     }
 
     pub fn handle_interrupt(&mut self, int_source: IntSource) -> usize {
@@ -1934,7 +1943,7 @@ impl Cpu {
             IntSource::JOYPAD => 0x60,
         };
 
-        self.bus.int_controller.interrupt_clear(int_source);
+        self.bus.clear_interrupt(int_source);
         return 5;
     }
 }
