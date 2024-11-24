@@ -21,6 +21,16 @@ impl GbRs {
     pub fn run_one(&mut self) -> usize {
         self.cpu.run_one()
     }
+
+    pub fn run_frame(&mut self) {
+        let mut cyc_remaining: i32 = 17556; /* cycles per frame */
+        while cyc_remaining > 0 {
+            cyc_remaining -= self.run_one() as i32;
+        }
+
+    }
+
+    
 }
 
 

@@ -6,9 +6,7 @@ use std::path::Path;
 
 pub fn run_1000_frames(gb: &mut GbRs) {
     for _ in 0..1000 {
-        for _ in 0..17556 /* cycles per frame */ { 
-            gb.run_one();
-        }
+        gb.run_frame();
     }
 }
 

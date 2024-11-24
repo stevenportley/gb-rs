@@ -54,6 +54,8 @@ fn gui(mut gb: GbRs) {
             .unwrap()
     };
 
+    let mut scale_factor = window.scale_factor();
+
     let mut pixels = {
         let window_size = window.inner_size();
         let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
@@ -63,17 +65,11 @@ fn gui(mut gb: GbRs) {
     let mut gui = Gui::new(&window, &pixels);
 
 
+
     event_loop.run(move |event, _, control_flow| {
 
         // Draw the current frame
         if let Event::RedrawRequested(_) = event {
-
-            let cycles_per_frame = 17556;
-            let mut cycles_so_far = 0;
-
-            while cycles_so_far < cycles_per_frame {
-                cycles_so_far += gb.run_one();
-            }
 
             let frame = gb.cpu.bus.ppu.get_frame();
             pixels.frame_mut()[..(8 * 32) * (4 * 8 * 32)].copy_from_slice(&frame);
@@ -96,6 +92,8 @@ fn gui(mut gb: GbRs) {
 
         }
 
+        gui.handle_event(&window, &event);
+
         // Handle input events
         if input.update(&event) {
             // Close events
@@ -104,11 +102,48 @@ fn gui(mut gb: GbRs) {
                 return;
             }
 
+            // Update the scale factor
+            if let Some(factor) = input.scale_factor() {
+                scale_factor = factor;
+            }
+
+
             // Resize the window
             if let Some(size) = input.window_resized() {
                 pixels
                     .resize_surface(size.width, size.height)
                     .expect("Failed to resize?");
+            }
+
+
+            /*
+            // Resize the window
+            if let Some(size) = input.window_resized() {
+                if size.width > 0 && size.height > 0 {
+                    // Resize the surface texture
+                    if let Err(err) = pixels.resize_surface(size.width, size.height) {
+                        //log_error("pixels.resize_surface", err);
+                        *control_flow = ControlFlow::Exit;
+                        return;
+                    }
+
+                    // Resize the world
+                    let LogicalSize { width, height } = size.to_logical(scale_factor);
+                    //world.resize(width, height);
+                    if let Err(err) = pixels.resize_buffer(width, height) {
+                        //log_error("pixels.resize_buffer", err);
+                        *control_flow = ControlFlow::Exit;
+                        return;
+                    }
+                }
+            }
+            */
+
+            let cycles_per_frame = 17556;
+            let mut cycles_so_far = 0;
+
+            while cycles_so_far < cycles_per_frame {
+                cycles_so_far += gb.run_one();
             }
 
             // Update internal state and request a redraw

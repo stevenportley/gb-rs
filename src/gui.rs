@@ -9,6 +9,7 @@ pub(crate) struct Gui {
     last_frame: Instant,
     last_cursor: Option<imgui::MouseCursor>,
     about_open: bool,
+    metrics_window: bool,
 }
 
 impl Gui {
@@ -26,6 +27,7 @@ impl Gui {
             imgui_winit_support::HiDpiMode::Default,
         );
 
+        /*
         // Configure Dear ImGui fonts
         let hidpi_factor = window.scale_factor();
         let font_size = (13.0 * hidpi_factor) as f32;
@@ -40,6 +42,7 @@ impl Gui {
                     ..Default::default()
                 }),
             }]);
+        */
 
         // Create Dear ImGui WGPU renderer
         let device = pixels.device();
@@ -58,6 +61,7 @@ impl Gui {
             last_frame: Instant::now(),
             last_cursor: None,
             about_open: true,
+            metrics_window: true,
         }
     }
 
@@ -92,17 +96,30 @@ impl Gui {
 
         // Draw windows and GUI elements here
         let mut about_open = false;
+        let mut metrics_window = false;
         ui.main_menu_bar(|| {
             ui.menu("Help", || {
                 about_open = ui.menu_item("About...");
+            });
+
+            ui.menu("Metrics", || {
+                metrics_window = ui.menu_item("Metrics...");
             });
         });
         if about_open {
             self.about_open = true;
         }
 
+        if metrics_window {
+            self.metrics_window = true;
+        }
+
         if self.about_open {
             ui.show_about_window(&mut self.about_open);
+        }
+
+        if self.metrics_window {
+            ui.show_metrics_window(&mut self.metrics_window);
         }
 
         // Render Dear ImGui with WGPU
