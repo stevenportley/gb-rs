@@ -1235,7 +1235,6 @@ impl<B: Bus> Cpu<B> {
                     return 1;
                 }
 
-
                 //TODO: Handle HALT bug
                 assert!(false);
                 return 1;
@@ -1897,7 +1896,6 @@ impl<B: Bus> Cpu<B> {
     }
 
     pub fn run_one(&mut self) -> usize {
-
         // Review this and make sure all four conditions are handled correctly
         // with IME and HALT
         if self.sleep {
@@ -1913,7 +1911,7 @@ impl<B: Bus> Cpu<B> {
             if let Some(interrupt) = self.bus.query_interrupt() {
                 let cycles = self.handle_interrupt(interrupt);
                 self.bus.run_cycles(cycles as u16);
-                return cycles
+                return cycles;
             }
         }
 

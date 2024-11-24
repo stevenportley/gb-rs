@@ -182,7 +182,8 @@ impl PPU {
         let mut i = 0;
 
         for (_, eight_pixels) in pixels.chunks_exact_mut(8).enumerate() {
-            eight_pixels.copy_from_slice(&tiles[y_tile_offset + i].pixel_buf(vert_line_tile_offset));
+            eight_pixels
+                .copy_from_slice(&tiles[y_tile_offset + i].pixel_buf(vert_line_tile_offset));
             i += 1;
         }
 
@@ -258,8 +259,12 @@ impl PPU {
                     return Tile::from_bytes(&self.vram[index..index + 16]);
                 });
 
-                oam_map.render_line(&mut self.background.buf[self.ly as usize][..160], &sprite_tiles, self.ly, false);
-
+                oam_map.render_line(
+                    &mut self.background.buf[self.ly as usize][..160],
+                    &sprite_tiles,
+                    self.ly,
+                    false,
+                );
 
                 // TODO: Use actual timing, not just 51
                 self.mode = PpuMode::HBLANK;
@@ -336,7 +341,6 @@ impl Frame {
     }
 
     pub fn to_rgba(&self) -> [u8; 4 * FRAME_WIDTH * FRAME_HEIGHT] {
-
         let mut pixels = [0; 4 * FRAME_WIDTH * FRAME_HEIGHT];
 
         let mut frame_iter = self.buf.into_iter().flatten();
@@ -349,5 +353,4 @@ impl Frame {
 
         pixels
     }
-
 }

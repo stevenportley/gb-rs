@@ -11,8 +11,8 @@ const HORIZ_TILES: usize = 32;
 const VERT_TILES: usize = 32;
 
 const WIDTH: u32 = (HORIZ_TILES * 8) as u32;
-const HEIGHT: u32 = (VERT_TILES * 8) as u32;
 const SCALING: f64 = 4.0;
+const HEIGHT: u32 = (VERT_TILES * 8) as u32;
 
 use pixels::{Pixels, SurfaceTexture};
 use winit::dpi::LogicalSize;
@@ -33,13 +33,15 @@ fn main() -> io::Result<()> {
     };
 
     let rom = std::fs::read(path).expect("Unable to load rom file");
-    let cpu = GbRs::new(rom.as_slice())?;
+    let gb = GbRs::new(rom.as_slice())?;
 
-    gui(cpu);
+    let mut gui = Gui::new(gb);
+    gui.run();
 
     Ok(())
 }
 
+/*
 fn gui(mut gb: GbRs) {
     let event_loop = EventLoop::new();
     let mut input = WinitInputHelper::new();
@@ -63,7 +65,6 @@ fn gui(mut gb: GbRs) {
     };
 
     let mut gui = Gui::new(&window, &pixels);
-
 
 
     event_loop.run(move |event, _, control_flow| {
@@ -151,3 +152,4 @@ fn gui(mut gb: GbRs) {
         }
     });
 }
+*/

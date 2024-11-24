@@ -10,10 +10,7 @@ pub fn run_1000_frames(gb: &mut GbRs) {
     }
 }
 
-
-
 pub fn criterion_benchmark(c: &mut Criterion) {
-
     let rom = read(Path::new("roms/tetris.gb")).expect("Unable to load tetris rom");
     let mut gb = GbRs::new(rom.as_slice()).expect("Cannot load Gb?");
 
@@ -22,4 +19,3 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
 criterion_group!(benches, criterion_benchmark);
 criterion_main!(benches);
-

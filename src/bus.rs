@@ -18,7 +18,6 @@ pub trait Bus {
     fn interrupt_pending(&self) -> bool;
 }
 
-
 pub struct StaticBus {
     rom: [u8; 0x4000],
     mapped_rom: [u8; 0x4000], //TODO(SP): This needs to be changed to support ROM bank mapper
@@ -53,7 +52,7 @@ impl StaticBus {
         rom.read_exact(&mut bus.mapped_rom)?;
         Ok(bus)
     }
-    
+
     pub fn is_passed(&self) -> bool {
         let (sl, _) = self.passed_buf.as_slices();
         let str = std::str::from_utf8(sl).expect("No!");
@@ -61,8 +60,7 @@ impl StaticBus {
     }
 }
 
-impl Bus for StaticBus { 
-
+impl Bus for StaticBus {
     fn write(&mut self, addr: u16, val: u8) {
         match addr {
             0..=0x3FFF => {
@@ -207,7 +205,6 @@ impl Bus for StaticBus {
         }
     }
 
-
     fn query_interrupt(&mut self) -> Option<IntSource> {
         self.int_controller.next()
     }
@@ -217,7 +214,6 @@ impl Bus for StaticBus {
     }
 
     fn run_cycles(&mut self, cycles: u16) {
-
         /* Move along the PPU */
         let maybe_int = self.ppu.run(cycles as i32);
 
@@ -234,7 +230,6 @@ impl Bus for StaticBus {
         if let Some(ppu_int) = maybe_int {
             self.int_controller.interrupt(ppu_int)
         }
-
     }
 
     fn is_passed(&self) -> bool {
@@ -244,7 +239,4 @@ impl Bus for StaticBus {
     fn interrupt_pending(&self) -> bool {
         self.int_controller.pending()
     }
-
-
-
 }

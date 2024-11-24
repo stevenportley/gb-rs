@@ -1,7 +1,7 @@
+use crate::bus::StaticBus;
 use crate::cpu::Cpu;
 use std::io;
 use std::time::{Duration, Instant};
-use crate::bus::StaticBus;
 
 pub struct GbRs {
     pub cpu: Cpu<StaticBus>,
@@ -27,12 +27,8 @@ impl GbRs {
         while cyc_remaining > 0 {
             cyc_remaining -= self.run_one() as i32;
         }
-
     }
-
-    
 }
-
 
 #[cfg(test)]
 mod tests {
