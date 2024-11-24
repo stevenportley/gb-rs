@@ -1,5 +1,4 @@
 use crate::cpu::Cpu;
-use crate::interrupts::IntSource;
 use std::io;
 use std::time::{Duration, Instant};
 use crate::bus::StaticBus;
@@ -19,11 +18,13 @@ impl GbRs {
         })
     }
 
-    pub fn run_one(&mut self) {
+    pub fn run_one(&mut self) -> usize {
         let start = Instant::now();
 
+        let mut cycles = 0;
+
         for _ in 0..100 {
-            self.cpu.run_one();
+            cycles += self.cpu.run_one();
         }
 
         self.total_time += Instant::now() - start;
@@ -36,6 +37,8 @@ impl GbRs {
                 self.total_time.div_f64(self.n_runs as f64)
             );
         }
+
+        cycles 
     }
 }
 

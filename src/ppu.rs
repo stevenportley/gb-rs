@@ -1,6 +1,6 @@
 use crate::interrupts::IntSource;
 use crate::oam::OamMap;
-use crate::tile::{get_background, Tile, TileRenderer};
+use crate::tile::Tile;
 
 // The number of tiles in all of VRAM
 pub const NTILES: usize = 384;
@@ -36,7 +36,6 @@ pub struct PPU {
     obp1: u8,
     wy: u8,
     wx: u8,
-    curr_x: u8,
     mode: PpuMode,
     r_cyc: i32,
     background: Frame,
@@ -59,7 +58,6 @@ impl PPU {
             obp1: 0,
             wy: 0,
             wx: 0,
-            curr_x: 0,
             mode: PpuMode::OAMSCAN,
             r_cyc: 20,
             background: Frame::new(),
@@ -225,50 +223,8 @@ impl PPU {
         tiles
     }
 
-    pub fn get_frame3(&self) -> [u8; (8 * 32) * (4 * 8 * 32)] {
-        self.background.to_rgba()
-    }
-
-    pub fn get_frame2(&self) -> [u8; (8 * 32) * (4 * 8 * 32)] {
-        let mut pixels = [0; (8 * 32) * (4 * 8 * 32)];
-        let bkgd_tiles = self.get_background();
-
-        let mut bkgnd = crate::tile::get_background(&bkgd_tiles);
-
-        let oam_map = OamMap::from_mem(&self.oam);
-        for ly in 0..bkgnd.len() {
-            //oam_map.render_line(&mut bkgnd[ly][0..160], &bkgd_tiles, ly as u8, false);
-        }
-
-        let mut bkgnd_iter = bkgnd.into_iter().flatten();
-
-        for (_, one_pixel) in pixels.chunks_exact_mut(4).enumerate() {
-            if let Some(new_pixel) = bkgnd_iter.next() {
-                one_pixel.copy_from_slice(&Self::palette_to_rgba(new_pixel));
-            }
-        }
-
-        pixels
-    }
-
-    //TODO: This function isn't going to work right,
-    //      need to replace with an actual line renderer
     pub fn get_frame(&self) -> [u8; (8 * 32) * (4 * 8 * 32)] {
-        let bck_gnd = self.get_background();
-        let mut tile_renderer = TileRenderer::from_tiles(&bck_gnd, 32 * 8);
-
-        let mut pixels = [0; (8 * 32) * (4 * 8 * 32)];
-
-        for (_, eight_pixels) in pixels.chunks_exact_mut(4 * 8).enumerate() {
-            if let Some(new_pixels) = tile_renderer.next() {
-                for i in 0..8 {
-                    eight_pixels[(4 * i)..((4 * i) + 4)]
-                        .copy_from_slice(&Self::palette_to_rgba(new_pixels[i]));
-                }
-            }
-        }
-
-        pixels
+        self.background.to_rgba()
     }
 
     pub fn run(&mut self, cycles: i32) -> Option<IntSource> {

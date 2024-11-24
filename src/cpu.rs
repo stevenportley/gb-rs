@@ -1,5 +1,4 @@
 use crate::{bus::Bus, interrupts::IntSource};
-use std::io;
 
 fn does_bit3_overflow(a: u8, b: u8) -> bool {
     let a = a & 0xF;
@@ -1207,7 +1206,6 @@ impl<B: Bus> Cpu<B> {
                 op2: None,
             } => {
                 unreachable!("Stop instruction not implemented!");
-                return 0;
             }
             Instr {
                 opcode: Opcode::LD,

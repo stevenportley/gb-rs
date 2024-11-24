@@ -33,7 +33,7 @@ fn main() -> io::Result<()> {
     };
 
     let rom = std::fs::read(path).expect("Unable to load rom file");
-    let mut cpu = GbRs::new(rom.as_slice())?;
+    let cpu = GbRs::new(rom.as_slice())?;
 
     gui(cpu);
 
@@ -54,8 +54,6 @@ fn gui(mut gb: GbRs) {
             .unwrap()
     };
 
-    let mut scale_factor = window.scale_factor();
-
     let mut pixels = {
         let window_size = window.inner_size();
         let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
@@ -64,19 +62,20 @@ fn gui(mut gb: GbRs) {
 
     let mut gui = Gui::new(&window, &pixels);
 
+
     event_loop.run(move |event, _, control_flow| {
-        //let background = ppu.get_background();
-        //let background = ppu.dump_vram();
 
         // Draw the current frame
         if let Event::RedrawRequested(_) = event {
-            for _ in 0..10000 {
-                gb.run_one();
+
+            let cycles_per_frame = 17556;
+            let mut cycles_so_far = 0;
+
+            while cycles_so_far < cycles_per_frame {
+                cycles_so_far += gb.run_one();
             }
 
-            //std::thread::sleep_ms(1);
-
-            let frame = gb.cpu.bus.ppu.get_frame3();
+            let frame = gb.cpu.bus.ppu.get_frame();
             pixels.frame_mut()[..(8 * 32) * (4 * 8 * 32)].copy_from_slice(&frame);
 
             gui.prepare(&window).expect("gui.prepare() failed");
@@ -95,22 +94,6 @@ fn gui(mut gb: GbRs) {
                 return;
             }
 
-            /*
-            let background = gb.bus.ppu.get_background();
-
-            let mut tile_renderer =
-                gb_rs::tile::TileRenderer::from_tiles(&background, WIDTH as usize);
-
-
-            for (_, eight_pixels) in pixels.frame_mut().chunks_exact_mut(4 * 8).enumerate() {
-                if let Some(new_pixels) = tile_renderer.next() {
-                    for i in 0..8 {
-                        eight_pixels[(4 * i)..((4 * i) + 4)]
-                            .copy_from_slice(&gb_rs::ppu::PPU::palette_to_rgba(new_pixels[i]));
-                    }
-                }
-            }
-            */
         }
 
         // Handle input events
