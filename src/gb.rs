@@ -19,28 +19,10 @@ impl GbRs {
     }
 
     pub fn run_one(&mut self) -> usize {
-        let start = Instant::now();
-
-        let mut cycles = 0;
-
-        for _ in 0..100 {
-            cycles += self.cpu.run_one();
-        }
-
-        self.total_time += Instant::now() - start;
-        self.n_runs += 100;
-
-        if self.n_runs % 1000000 == 0 {
-            println!("Time consumed: {:?}", self.total_time);
-            println!(
-                "Time per cycle: {:?}",
-                self.total_time.div_f64(self.n_runs as f64)
-            );
-        }
-
-        cycles 
+        self.cpu.run_one()
     }
 }
+
 
 #[cfg(test)]
 mod tests {
