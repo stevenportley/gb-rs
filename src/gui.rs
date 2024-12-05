@@ -140,7 +140,6 @@ impl Gui {
     }
 
     pub fn run(mut self) {
-        let mut scale_factor = self.window.scale_factor();
         let mut input = WinitInputHelper::new();
 
         self.event_loop.run(move |event, _, control_flow| {
@@ -215,11 +214,6 @@ impl Gui {
                     return;
                 }
 
-                // Update the scale factor
-                if let Some(factor) = input.scale_factor() {
-                    scale_factor = factor;
-                }
-
                 // Resize the window
                 if let Some(size) = input.window_resized() {
                     self.pixels
@@ -236,16 +230,6 @@ impl Gui {
                             *control_flow = ControlFlow::Exit;
                             return;
                         }
-
-                        /*
-                        // Resize the world
-                        let LogicalSize { width, height } = size.to_logical(scale_factor);
-                        if let Err(err) = self.pixels.resize_buffer(width, height) {
-                            println!("pixels.resize_buffer: {}", err);
-                            *control_flow = ControlFlow::Exit;
-                            return;
-                        }
-                        */
                     }
                 }
 
