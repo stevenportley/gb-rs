@@ -38,7 +38,7 @@ pub struct PPU {
     wx: u8,
     mode: PpuMode,
     r_cyc: i32,
-    background: Frame,
+    pub background: Frame,
 }
 
 impl PPU {
