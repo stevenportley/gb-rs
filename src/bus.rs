@@ -1,7 +1,10 @@
-use std::collections::VecDeque;
 use std::io;
 
+use heapless::Deque;
+use heapless::Vec;
+
 use crate::interrupts::{IntSource, InterruptController};
+use crate::joypad::Joypad;
 use crate::ppu::PPU;
 use crate::timer::Timer;
 
@@ -27,9 +30,10 @@ pub struct StaticBus {
     mapped_wram: [u8; 0x1000],
     pub timer: Timer,
     pub int_controller: InterruptController,
+    pub joypad: Joypad,
     io: [u8; 0x80],
     hram: [u8; 0x7F],
-    passed_buf: VecDeque<u8>,
+    passed_buf: Deque<u8, 6>,
 }
 
 impl StaticBus {
@@ -43,9 +47,10 @@ impl StaticBus {
             mapped_wram: [0; 0x1000],
             timer: Timer::new(),
             int_controller: InterruptController::new(),
+            joypad: Joypad::new(), 
             io: [0; 0x80],
             hram: [0; 0x7F],
-            passed_buf: VecDeque::new(),
+            passed_buf: Deque::new(),
         };
 
         rom.read_exact(&mut bus.rom)?;
@@ -54,8 +59,8 @@ impl StaticBus {
     }
 
     pub fn is_passed(&self) -> bool {
-        let (sl, _) = self.passed_buf.as_slices();
-        let str = std::str::from_utf8(sl).expect("No!");
+        let buf: Vec<_, 10> = self.passed_buf.clone().into_iter().collect();
+        let str = core::str::from_utf8(&buf).expect("No!");
         return str == "Passed";
     }
 }
@@ -92,14 +97,16 @@ impl Bus for StaticBus {
             0xFEA0..=0xFEFF => {
                 println!("Attempting to write to prohibited area! {addr}, {val}");
             }
-            0xFF00..=0xFF03 => {
+            0xFF00 => {
+                self.joypad.write(addr, val);
+            }
+            0xFF01..=0xFF03 => {
                 self.io[addr as usize - 0xFF00] = val;
                 if addr == 0xFF01 {
-                    self.passed_buf.push_back(val);
-                    if self.passed_buf.len() > 6 {
-                        self.passed_buf.pop_front();
+                    if self.passed_buf.is_full() {
+                        let _ = self.passed_buf.pop_front();
                     }
-                    self.passed_buf.make_contiguous();
+                    let _ = self.passed_buf.push_back(val);
                 }
             }
             0xFF04..=0xFF07 => {
@@ -170,8 +177,7 @@ impl Bus for StaticBus {
                 return 0;
             }
             0xFF00 => {
-                // Joypad input
-                return 0xFF;
+                return self.joypad.read(addr);
             }
             0xFF01..=0xFF03 => {
                 return self.io[addr as usize - 0xFF00];

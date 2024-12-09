@@ -1,12 +1,23 @@
-use gb_rs::gb::GbRs;
+use gb_rs::{gb::GbRs, joypad::JoypadDirection, joypad::JoypadInput};
+use ratatui::buffer::Cell;
+use ratatui::widgets::canvas::Context;
 use std::io;
 
 use std::io::stdout;
 
 use ratatui::{backend::CrosstermBackend, Terminal, TerminalOptions, Viewport};
+use ratatui::layout::{Position, Constraint, Layout};
 
 
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
+use crossterm::execute;
+use crossterm::event::{
+    KeyboardEnhancementFlags,
+    PushKeyboardEnhancementFlags,
+    PopKeyboardEnhancementFlags
+};
+
+
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
@@ -21,6 +32,10 @@ pub struct App {
     counter: u32,
     exit: bool,
     gb: GbRs
+}
+
+struct GameFrame<'a> {
+    frame: &'a gb_rs::ppu::Frame,
 }
 
 
@@ -38,16 +53,32 @@ impl App {
     }
 
     fn draw(&self, frame: &mut Frame) {
+
         let canvas = Canvas::default()
-            .block(Block::bordered().title("World, Frame:".to_string() + &self.counter.to_string()))
+            //.block(Block::bordered())
             .marker(ratatui::symbols::Marker::HalfBlock)
             .paint(|ctx| {
-                ctx.draw(self);
+                let game_frame = GameFrame {
+                    frame: &self.gb.cpu.bus.ppu.background,
+                };
+                ctx.draw(&game_frame);
             })
-            .x_bounds([-100.0, 100.0])
-            .y_bounds([-100.0, 100.0]);
+            .x_bounds([0.0, 160.0])
+            .y_bounds([0.0, 144.0]);
 
-        frame.render_widget(canvas, frame.area());
+
+        let horizontal = Layout::horizontal([Constraint::Length(160), Constraint::Fill(1)]);
+        let [left, right] = horizontal.areas(frame.area());
+
+        let vertical = Layout::vertical([Constraint::Length(72), Constraint::Fill(1)]);
+        let [main, _] = vertical.areas(left);
+
+
+        frame.render_widget(Block::bordered()
+            .title(format!("GB RS: Area: {:?}, Frame: {}", left, &self.counter.to_string())), right);
+        frame.render_widget(canvas, main);
+
+
     }
 
     fn handle_events(&mut self) -> io::Result<()> {
@@ -57,38 +88,49 @@ impl App {
         match event::read()? {
             // it's important to check that the event is a key press event as
             // crossterm also emits key release and repeat events on Windows.
-            Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
-                self.handle_key_event(key_event)
+            Event::Key(key_event) => {
+                let dir = match key_event.kind {
+                    KeyEventKind::Press => JoypadDirection::PRESS,
+                    KeyEventKind::Release => JoypadDirection::RELEASE,
+                    _ =>  JoypadDirection::PRESS,
+                };
+
+                match key_event.code {
+                    KeyCode::Char('q') => { self.exit = true },
+                    KeyCode::Char('w') => { self.gb.cpu.bus.joypad.input(JoypadInput::UP, dir) },
+                    KeyCode::Char('a') => { self.gb.cpu.bus.joypad.input(JoypadInput::LEFT, dir) },
+                    KeyCode::Char('d') => { self.gb.cpu.bus.joypad.input(JoypadInput::RIGHT, dir) },
+                    KeyCode::Char('s') => { self.gb.cpu.bus.joypad.input(JoypadInput::DOWN, dir) },
+                    KeyCode::Char('j') => { self.gb.cpu.bus.joypad.input(JoypadInput::B, dir) },
+                    KeyCode::Char('k') => { self.gb.cpu.bus.joypad.input(JoypadInput::A, dir) },
+                    _ => {}
+                }
             },
             _ => {}
         };
         Ok(())
     }
 
-    fn handle_key_event(&mut self, key_event: KeyEvent) {
-        match key_event.code {
-            KeyCode::Char('q') => { self.exit = true },
-            _ => {}
-        }
-    }
-
-
-
 }
 
-impl Shape for App {
+impl<'a> Shape for GameFrame<'a> {
     fn draw(&self, painter: &mut Painter<'_, '_>) {
-        let frame = self.gb.cpu.bus.ppu.background.buf;
+
         for y in 0..144 {
             for x in 0..160 {
-                painter.paint(x, y, match frame[y][x] {
+                let color = match self.frame.buf[144 - y][x] {
                     0 => Color::White,
                     1 => Color::Gray,
                     2 => Color::DarkGray,
                     3 => Color::Black,
                     _ => Color::Blue,
-                });
+                };
+
+                if let Some((x, y)) = painter.get_point(x as f64, y as f64) {
+                    painter.paint(x, y, color);
+                }
             }
+        
         }
     }
 }
@@ -102,18 +144,24 @@ pub fn run_tui(gb: GbRs) -> io::Result<()> {
         gb
     };
 
-    let backend = CrosstermBackend::new(stdout());
-    let viewport = Viewport::Fixed(Rect::new(0, 0, 500, 500));
-    let terminal = Terminal::with_options(backend, TerminalOptions { viewport })?;
-
     let mut terminal = ratatui::init();
-    terminal.resize(ratatui::layout::Rect { x: 0, y: 0, width: 600, height: 600});
+    execute!(
+        terminal.backend_mut(),
+        PushKeyboardEnhancementFlags(
+        KeyboardEnhancementFlags::REPORT_EVENT_TYPES
+        )
+    ).expect("Failure to enable key up events");
+
+    //terminal.resize(ratatui::layout::Rect { x: 0, y: 0, width: 600, height: 600}).expect("Unable to resize :(");
     terminal.clear()?;
     let app_result = app.run(&mut terminal);
+
+    execute!(terminal.backend_mut(), PopKeyboardEnhancementFlags)
+        .expect("Unable to disable key up events");
+
     ratatui::restore();
+
     app_result
-
-
 }
 
 

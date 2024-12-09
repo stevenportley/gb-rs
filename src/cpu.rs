@@ -126,8 +126,12 @@ pub struct Instr {
 }
 
 impl<B: Bus> Cpu<B> {
+    //TODO: Add an API to build the CPU in a state that
+    //      does not skip the boot rom
+    
     pub fn new(bus: B) -> Self {
-        let mut cpu = Cpu {
+
+        Cpu {
             a: 0x01,
             b: 0x00,
             c: 0x13,
@@ -144,11 +148,18 @@ impl<B: Bus> Cpu<B> {
             ime: false,
             sleep: false,
             bus,
-        };
+        }
 
+        // I don't remember exactly why this was 
+        // here, but I think this might be here
+        // back when the PPU was just a bank of memory
+        // and we needed 0xFF44 to always return 0x90
+        // to make it work with the Gameboy Doctor tests.
+        // TODO: Make sure this isn't needed anymore and remove
+        // this dead code.  We shouldn't need GB doctor anymore.
+        //
         // Temporary to make LCD work with test ROMs
-        cpu.bus.write(0xFF44, 0x90);
-        cpu
+        // cpu.bus.write(0xFF44, 0x90);
     }
 
     fn get_f(&self) -> u8 {
