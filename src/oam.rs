@@ -121,7 +121,7 @@ impl<'a> OamMap<'a> {
 }
 
 pub struct OamIter<'a> {
-    oam_iter: std::slice::Iter<'a, OamEntry<'a>>,
+    oam_iter: core::slice::Iter<'a, OamEntry<'a>>,
     ly: u8,
     tile_height: u8,
     cnt: usize,

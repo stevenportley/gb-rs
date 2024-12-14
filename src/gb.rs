@@ -1,21 +1,16 @@
 use crate::bus::StaticBus;
 use crate::cpu::Cpu;
-use std::io;
-use std::time::{Duration, Instant};
+use crate::rom::Rom;
 
 pub struct GbRs {
     pub cpu: Cpu<StaticBus>,
-    total_time: Duration,
-    n_runs: u64,
 }
 
 impl GbRs {
-    pub fn new<T: io::Read>(rom: T) -> io::Result<Self> {
-        Ok(Self {
-            cpu: Cpu::new(StaticBus::new(rom)?),
-            total_time: Duration::new(0, 0),
-            n_runs: 0,
-        })
+    pub fn new(rom: Rom) -> Self {
+        Self {
+            cpu: Cpu::new(StaticBus::new(rom)),
+        }
     }
 
     pub fn run_one(&mut self) -> usize {
@@ -39,8 +34,9 @@ mod tests {
 
     fn rom_test(rom_path: &Path) {
         let rom = read(rom_path).expect("Unable to load test rom: {rom_path}");
+        let rom = Rom::from_slice(rom.as_slice());
 
-        let mut gb = GbRs::new(rom.as_slice()).expect("Unable to load test rom");
+        let mut gb = GbRs::new(rom);
 
         let timeout = time::Instant::now() + time::Duration::from_secs(30);
 

@@ -85,7 +85,7 @@ impl PPU {
                 self.scx = val;
             }
             0xFF44 => {
-                println!("Trying to write to LY, a read-only register");
+                //println!("Trying to write to LY, a read-only register");
             }
             0xFF45 => {
                 self.lyc = val;

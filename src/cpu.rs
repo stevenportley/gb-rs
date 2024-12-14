@@ -68,6 +68,49 @@ const HL_REG: u8 = 2;
 
 const HL_PTR: u8 = 6;
 
+#[derive(Debug, Clone, Copy)]
+pub enum Reg {
+    B, C, D, E, H, L, A,
+    BC, DE, HL, SP,
+}
+
+
+/*
+ * TODO: Replace decode with this to save space?
+#[derive(Debug)]
+pub enum Instruction2 {
+    Nop,                              // 0x00 - No operation
+    Load { src: Reg, dest: Reg },      // LD src, dest
+    LoadImm8 { reg: Reg, value: u8 },  // LD reg, #8-bit value
+    LoadImm16 { reg: Reg, value: u16 },// LD reg, #16-bit value
+    LoadMemToReg { reg: Reg, addr: u16 },  // LD (addr), reg
+    LoadRegToMem { reg: Reg, addr: u16 },  // LD reg, (addr)
+    Add { reg: Reg },                  // ADD reg
+    AddImm8 { value: u8 },             // ADD A, #8-bit value
+    Sub { reg: Reg },                  // SUB reg
+    And { reg: Reg },                  // AND reg
+    Or { reg: Reg },                   // OR reg
+    Xor { reg: Reg },                  // XOR reg
+    Compare { reg: Reg },              // CP reg
+    Inc { reg: Reg },                  // INC reg
+    Dec { reg: Reg },                  // DEC reg
+    Jump { addr: u16 },                // JP addr
+    JumpRelative { offset: i8 },       // JR offset
+    Call { addr: u16 },                // CALL addr
+    Return,                            // RET
+    Halt,                              // STOP
+    Di,                                // DI (Disable interrupts)
+    Ei,                                // EI (Enable interrupts)
+    Rst { vector: u16 },               // RST vector
+    Rotate { reg: Reg, direction: char }, // RLC, RL, etc.
+    BitTest { reg: Reg, bit: u8 },      // BIT bit, reg
+    Swap { reg: Reg },                 // SWAP reg
+    Shift { reg: Reg, direction: char }, // SLA, SRA, etc.
+    Undefined(u8),                     // For undefined opcodes
+}
+*/
+
+
 #[derive(Debug, PartialEq)]
 enum Opcode {
     NOP,
@@ -939,6 +982,7 @@ impl<B: Bus> Cpu<B> {
         instr
     }
 
+    /*
     pub fn log_state(&self) {
         // This is formatted for use with gb doctor
         // https://robertheaton.com/gameboy-doctor/
@@ -958,6 +1002,7 @@ impl<B: Bus> Cpu<B> {
             self.bus.read(self.pc + 2),
             self.bus.read(self.pc + 3));
     }
+    */
 
     pub fn is_passed(&self) -> bool {
         return self.bus.is_passed();
@@ -1946,5 +1991,12 @@ impl<B: Bus> Cpu<B> {
 
         self.bus.clear_interrupt(int_source);
         return 5;
+    }
+
+    pub fn get_next_instrs<const N: usize>(&mut self) -> [Instr; N] {
+        let curr_pc = self.pc;
+        let instrs : [Instr; N] = core::array::from_fn(|_index| self.next_instr());
+        self.pc = curr_pc;
+        return instrs;
     }
 }

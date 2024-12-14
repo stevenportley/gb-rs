@@ -1,3 +1,4 @@
+use core::fmt::Display;
 
 #[derive(Debug)]
 pub enum JoypadInput {
@@ -11,26 +12,43 @@ pub enum JoypadInput {
     RIGHT,
 }
 
+impl JoypadInput {
+    fn to_reg(&self) -> u8 {
+        match self {
+            JoypadInput::START | JoypadInput::DOWN => 0x8,
+            JoypadInput::SELECT | JoypadInput::UP => 0x4,
+            JoypadInput::B | JoypadInput::LEFT => 0x2,
+            JoypadInput::A | JoypadInput::RIGHT => 0x1,
+        }
+    }
+
+    fn is_button(&self) -> bool {
+        match self {
+            JoypadInput::START | JoypadInput::SELECT | JoypadInput::A | JoypadInput::B => true,
+            _ => false,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum JoypadDirection {
     PRESS,
     RELEASE,
 }
 
-
+#[derive(Clone)]
 pub struct Joypad {
     dpad_state: u8,
-    select_state: u8,
+    button_state: u8,
     reg: u8,
 }
-
 
 impl Joypad {
 
     pub fn new() -> Self {
         Self {
             dpad_state: 0xF,
-            select_state: 0xF,
+            button_state: 0xF,
             reg: 0x30,
         }
     }
@@ -58,9 +76,9 @@ impl Joypad {
 
         if self.select_buttons() {
             if self.select_dpad() {
-                return (self.dpad_state & self.select_state) | self.reg;
+                return (self.dpad_state & self.button_state) | self.reg;
             } else {
-                return self.select_state | self.reg;
+                return self.button_state | self.reg;
             }
         } else {
             if self.select_dpad() {
@@ -72,72 +90,54 @@ impl Joypad {
     }
 
     pub fn input(&mut self, button: JoypadInput, direction: JoypadDirection) {
-        println!("Joypad input: {:?} Direction {:?}", button, direction);
 
-        let press = match direction {
+        let state_reg = if button.is_button() { &mut self.button_state } else { &mut self.dpad_state };
+
+        let pressed = match direction {
             JoypadDirection::PRESS => true,
             JoypadDirection::RELEASE => false,
         };
 
-        match button {
-            JoypadInput::START => {
-                if press {
-                    self.select_state &= !0x8;
-                } else {
-                    self.select_state |= 0x8;
-                }
-            },
-            JoypadInput::SELECT => {
-                if press {
-                    self.select_state &= !0x4;
-                } else {
-                    self.select_state |= 0x4;
-                }
-            },
-            JoypadInput::B => {
-                if press {
-                    self.select_state &= !0x2;
-                } else {
-                    self.select_state |= 0x2;
-                }
+        // Joypad input are active low,
+        if pressed {
+            *state_reg &= !button.to_reg();
+        } else {
+            *state_reg |= button.to_reg();
+        }
+    }
 
-            },
-            JoypadInput::A => 
-                if press {
-                    self.select_state &= !0x1;
-                } else {
-                    self.select_state |= 0x1;
-                },
-            JoypadInput::DOWN => {
-                if press {
-                    self.dpad_state &= !0x8;
-                } else {
-                    self.dpad_state |= 0x8;
-                }
-                },
-            JoypadInput::UP => {
-                if press {
-                    self.dpad_state &= !0x4;
-                } else {
-                    self.dpad_state |= 0x4;
-                }
-                },
-            JoypadInput::LEFT => {
-                if press {
-                    self.dpad_state &= !0x2;
-                } else {
-                    self.dpad_state |= 0x2;
-                }
-                },
-            JoypadInput::RIGHT => {
-                if press {
-                    self.dpad_state &= !0x1;
-                } else {
-                    self.dpad_state |= 0x1;
-                }
-                },
-        };
+    pub fn get_state(&self) -> JoypadState {
+        return JoypadState {
+            joypad: self.clone()
+        }
+    }
 
+}
+
+pub struct JoypadState {
+    joypad: Joypad,
+}
+
+impl JoypadState {
+
+    pub fn is_pressed(&self, button: JoypadInput) -> bool {
+        let state_reg = if button.is_button() { self.joypad.button_state } else { self.joypad.dpad_state };
+
+        state_reg & button.to_reg() == 0
+    }
+}
+
+impl Display for JoypadState {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        writeln!(f, "A: {}", self.is_pressed(JoypadInput::A))?;
+        writeln!(f, "B: {}", self.is_pressed(JoypadInput::B))?;
+        writeln!(f, "LEFT: {}", self.is_pressed(JoypadInput::LEFT))?;
+        writeln!(f, "UP: {}", self.is_pressed(JoypadInput::UP))?;
+        writeln!(f, "RIGHT: {}", self.is_pressed(JoypadInput::RIGHT))?;
+        writeln!(f, "DOWN: {}", self.is_pressed(JoypadInput::DOWN))?;
+        writeln!(f, "START: {}", self.is_pressed(JoypadInput::START))?;
+        writeln!(f, "SELECT: {}", self.is_pressed(JoypadInput::SELECT))?;
+        Ok(())
     }
 
 }

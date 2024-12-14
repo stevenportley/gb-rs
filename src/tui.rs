@@ -52,7 +52,7 @@ impl App {
         Ok(())
     }
 
-    fn draw(&self, frame: &mut Frame) {
+    fn draw(&mut self, frame: &mut Frame) {
 
         let canvas = Canvas::default()
             //.block(Block::bordered())
@@ -73,10 +73,40 @@ impl App {
         let vertical = Layout::vertical([Constraint::Length(72), Constraint::Fill(1)]);
         let [main, _] = vertical.areas(left);
 
-
         frame.render_widget(Block::bordered()
             .title(format!("GB RS: Area: {:?}, Frame: {}", left, &self.counter.to_string())), right);
         frame.render_widget(canvas, main);
+
+        let joypad_state = self.gb.cpu.bus.joypad.get_state();
+        frame.render_widget(Text::from(format!("{}", joypad_state)), right);
+
+        let instr_trace = self.gb.cpu.get_next_instrs::<20>();
+
+        frame.render_widget(
+            Paragraph::new(vec![
+                Line::from(format!("{:?}", instr_trace[0])),
+                Line::from(format!("{:?}", instr_trace[1])),
+                Line::from(format!("{:?}", instr_trace[2])),
+                Line::from(format!("{:?}", instr_trace[3])),
+                Line::from(format!("{:?}", instr_trace[4])),
+                Line::from(format!("{:?}", instr_trace[5])),
+                Line::from(format!("{:?}", instr_trace[6])),
+                Line::from(format!("{:?}", instr_trace[7])),
+                Line::from(format!("{:?}", instr_trace[8])),
+                Line::from(format!("{:?}", instr_trace[9])),
+                Line::from(format!("{:?}", instr_trace[10])),
+                Line::from(format!("{:?}", instr_trace[11])),
+                Line::from(format!("{:?}", instr_trace[12])),
+                Line::from(format!("{:?}", instr_trace[13])),
+                Line::from(format!("{:?}", instr_trace[14])),
+                Line::from(format!("{:?}", instr_trace[15])),
+                Line::from(format!("{:?}", instr_trace[16])),
+                Line::from(format!("{:?}", instr_trace[17])),
+                Line::from(format!("{:?}", instr_trace[18])),
+                Line::from(format!("{:?}", instr_trace[19])),
+            ]),
+            right)
+        
 
 
     }
@@ -103,6 +133,8 @@ impl App {
                     KeyCode::Char('s') => { self.gb.cpu.bus.joypad.input(JoypadInput::DOWN, dir) },
                     KeyCode::Char('j') => { self.gb.cpu.bus.joypad.input(JoypadInput::B, dir) },
                     KeyCode::Char('k') => { self.gb.cpu.bus.joypad.input(JoypadInput::A, dir) },
+                    KeyCode::Char('u') => { self.gb.cpu.bus.joypad.input(JoypadInput::START, dir) },
+                    KeyCode::Char('i') => { self.gb.cpu.bus.joypad.input(JoypadInput::SELECT, dir) },
                     _ => {}
                 }
             },

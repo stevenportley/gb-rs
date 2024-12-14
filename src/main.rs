@@ -1,25 +1,13 @@
 use gb_rs::gb::GbRs;
-use std::env;
-use std::io;
+use gb_rs::rom::Rom;
 
 mod gui;
 mod tui;
 
 
-use std::path::Path;
 
-
-fn main() -> io::Result<()> {
-    let args: Vec<String> = env::args().collect();
-
-    let path = if args.len() != 2 {
-        Path::new("roms/tetris.gb")
-    } else {
-        Path::new(&args[1])
-    };
-
-    let rom = std::fs::read(path).expect("Unable to load rom file");
-    let gb = GbRs::new(rom.as_slice())?;
+fn main() -> std::io::Result<()> {
+    let gb = GbRs::new(Rom::tetris_cart());
 
     tui::run_tui(gb)?;
     /*
