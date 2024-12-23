@@ -9,7 +9,7 @@ pub const NTILES: usize = 384;
 pub const NUM_BACKGROUND_TILES: usize = 32 * 32;
 
 
-const FRAME_WIDTH: usize = 255;
+const BKG_WIDTH: usize = 256;
 const SCREEN_WIDTH: usize = 160;
 const SCREEN_HEIGHT: usize = 144;
 
@@ -166,9 +166,9 @@ impl PPU {
         }
     }
 
-    fn render_bg_line(&self, ly: u8) -> [u8; FRAME_WIDTH] {
+    fn render_bg_line(&self, ly: u8) -> [u8; BKG_WIDTH] {
         // The number of tiles in a horizontal line
-        const N_TILES_IN_LINE: usize = FRAME_WIDTH / 8;
+        const N_TILES_IN_LINE: usize = BKG_WIDTH / 8;
 
         // The tile offset corresponding to the begining of this line
         let y_tile_offset = (ly as usize / 8) * N_TILES_IN_LINE;
@@ -180,7 +180,7 @@ impl PPU {
 
         let tiles = self.get_background();
 
-        let mut pixels = [0; FRAME_WIDTH];
+        let mut pixels = [0; BKG_WIDTH];
         let mut i = 0;
 
         for (_, eight_pixels) in pixels.chunks_exact_mut(8).enumerate() {
