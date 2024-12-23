@@ -44,7 +44,6 @@ pub struct Joypad {
 }
 
 impl Joypad {
-
     pub fn new() -> Self {
         Self {
             dpad_state: 0xF,
@@ -90,8 +89,11 @@ impl Joypad {
     }
 
     pub fn input(&mut self, button: JoypadInput, direction: JoypadDirection) {
-
-        let state_reg = if button.is_button() { &mut self.button_state } else { &mut self.dpad_state };
+        let state_reg = if button.is_button() {
+            &mut self.button_state
+        } else {
+            &mut self.dpad_state
+        };
 
         let pressed = match direction {
             JoypadDirection::PRESS => true,
@@ -108,10 +110,9 @@ impl Joypad {
 
     pub fn get_state(&self) -> JoypadState {
         return JoypadState {
-            joypad: self.clone()
-        }
+            joypad: self.clone(),
+        };
     }
-
 }
 
 pub struct JoypadState {
@@ -119,9 +120,12 @@ pub struct JoypadState {
 }
 
 impl JoypadState {
-
     pub fn is_pressed(&self, button: JoypadInput) -> bool {
-        let state_reg = if button.is_button() { self.joypad.button_state } else { self.joypad.dpad_state };
+        let state_reg = if button.is_button() {
+            self.joypad.button_state
+        } else {
+            self.joypad.dpad_state
+        };
 
         state_reg & button.to_reg() == 0
     }
@@ -139,7 +143,4 @@ impl Display for JoypadState {
         writeln!(f, "SELECT: {}", self.is_pressed(JoypadInput::SELECT))?;
         Ok(())
     }
-
 }
-
-

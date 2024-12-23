@@ -8,8 +8,10 @@ pub const NTILES: usize = 384;
 // The whole background
 pub const NUM_BACKGROUND_TILES: usize = 32 * 32;
 
-const FRAME_WIDTH: usize = 256;
-const FRAME_HEIGHT: usize = 256;
+
+const FRAME_WIDTH: usize = 255;
+const SCREEN_WIDTH: usize = 160;
+const SCREEN_HEIGHT: usize = 144;
 
 const VRAM_LEN: usize = 0x2000;
 const OAM_LEN: usize = 0xA0;
@@ -38,7 +40,7 @@ pub struct PPU {
     wx: u8,
     mode: PpuMode,
     r_cyc: i32,
-    pub background: Frame,
+    pub screen: Frame,
 }
 
 impl PPU {
@@ -60,7 +62,7 @@ impl PPU {
             wx: 0,
             mode: PpuMode::OAMSCAN,
             r_cyc: 20,
-            background: Frame::new(),
+            screen: Frame::new(),
         }
     }
 
@@ -190,6 +192,10 @@ impl PPU {
         pixels
     }
 
+    fn obj_en(&self) -> bool {
+        self.lcdc & 0x2 != 0
+    }
+
     fn bkgr_start_addr(&self) -> usize {
         if self.lcdc & 0x8 == 0 {
             return 0x9800;
@@ -224,8 +230,8 @@ impl PPU {
         tiles
     }
 
-    pub fn get_frame(&self) -> [u8; (8 * 32) * (4 * 8 * 32)] {
-        self.background.to_rgba()
+    pub fn get_screen(&self) -> [u8; 4 * SCREEN_WIDTH * SCREEN_HEIGHT] {
+        self.screen.to_rgba()
     }
 
     pub fn run(&mut self, cycles: i32) -> Option<IntSource> {
@@ -250,21 +256,36 @@ impl PPU {
                 // TODO: Incorproate SCX
 
                 let bg_line = self.render_bg_line(self.ly);
-                self.background.buf[self.ly as usize].copy_from_slice(&bg_line);
 
-                let oam_map = OamMap::from_mem(&self.oam);
+                let scx = self.scx as usize;
+                let ly = self.ly as usize;
 
-                let sprite_tiles: [Tile; 256] = core::array::from_fn(|tile_index| {
-                    let index = tile_index * 16;
-                    return Tile::from_bytes(&self.vram[index..index + 16]);
-                });
+/*
+                if scx + 160 > 255 {
+                    let first_cpy_len = bg_line[scx..].len() as usize;
+                    self.screen.buf[ly][0..first_cpy_len].copy_from_slice(&bg_line[scx..]);
+                    self.screen.buf[ly][first_cpy_len..].copy_from_slice(&bg_line[..160 - first_cpy_len]);
+                } else {
+                    self.screen.buf[ly].copy_from_slice(&bg_line[scx..scx+160]);
+                }
+*/
+                self.screen.buf[ly].copy_from_slice(&bg_line[..160]);
 
-                oam_map.render_line(
-                    &mut self.background.buf[self.ly as usize][..160],
-                    &sprite_tiles,
-                    self.ly,
-                    false,
-                );
+                if self.obj_en() {
+                    let oam_map = OamMap::from_mem(&self.oam);
+
+                    let sprite_tiles: [Tile; 256] = core::array::from_fn(|tile_index| {
+                        let index = tile_index * 16;
+                        return Tile::from_bytes(&self.vram[index..index + 16]);
+                    });
+
+                    oam_map.render_line(
+                        &mut self.screen.buf[ly],
+                        &sprite_tiles,
+                        self.ly,
+                        false,
+                    );
+                }
 
                 // TODO: Use actual timing, not just 51
                 self.mode = PpuMode::HBLANK;
@@ -330,18 +351,18 @@ impl PPU {
 }
 
 pub struct Frame {
-    pub buf: [[u8; FRAME_WIDTH]; FRAME_HEIGHT],
+    pub buf: [[u8; SCREEN_WIDTH]; SCREEN_HEIGHT],
 }
 
 impl Frame {
     pub fn new() -> Self {
         Frame {
-            buf: [[0; FRAME_WIDTH]; FRAME_HEIGHT],
+            buf: [[0; SCREEN_WIDTH]; SCREEN_HEIGHT],
         }
     }
 
-    pub fn to_rgba(&self) -> [u8; 4 * FRAME_WIDTH * FRAME_HEIGHT] {
-        let mut pixels = [0; 4 * FRAME_WIDTH * FRAME_HEIGHT];
+    pub fn to_rgba(&self) -> [u8; 4 * SCREEN_WIDTH * SCREEN_HEIGHT] {
+        let mut pixels = [0; 4 * SCREEN_WIDTH * SCREEN_HEIGHT];
 
         let mut frame_iter = self.buf.into_iter().flatten();
 

@@ -1,5 +1,6 @@
-
 const ROM_LEN: usize = 0x4000;
+const TETRIS: &[u8; 2 * ROM_LEN] = include_bytes!("../roms/tetris.gb");
+const ACID: &[u8; 2 * ROM_LEN] = include_bytes!("../roms/dmg-acid2.gb");
 
 pub struct Rom {
     rom: [u8; ROM_LEN],
@@ -7,14 +8,18 @@ pub struct Rom {
 }
 
 impl Rom {
-
     pub fn tetris_cart() -> Rom {
-        const BYTES: &[u8; 2 * ROM_LEN] = include_bytes!("../roms/tetris.gb");
-        let rom = Rom { 
-            rom: BYTES[..ROM_LEN].try_into().unwrap(), 
-            mapped_rom: BYTES[ROM_LEN..].try_into().unwrap(),
-        };
-        rom
+        Self {
+            rom: TETRIS[..ROM_LEN].try_into().unwrap(),
+            mapped_rom: TETRIS[ROM_LEN..].try_into().unwrap(),
+        }
+    }
+
+    pub fn acid_cart() -> Rom {
+        Self {
+            rom: ACID[..ROM_LEN].try_into().unwrap(),
+            mapped_rom: ACID[ROM_LEN..].try_into().unwrap(),
+        }
     }
 
     pub fn from_slice(data: &[u8]) -> Rom {
@@ -30,11 +35,10 @@ impl Rom {
 
     pub fn read(&self, addr: u16) -> u8 {
         let addr = addr as usize;
-        if addr < self.rom.len() {
+        if addr < ROM_LEN {
             self.rom[addr]
         } else {
-            self.mapped_rom[addr - self.rom.len()]
+            self.mapped_rom[addr - ROM_LEN]
         }
     }
-
 }

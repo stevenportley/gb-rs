@@ -5,7 +5,7 @@ pub struct OamEntry<'a> {
 }
 
 pub struct OamFlags {
-    priority: bool,
+    low_priority: bool,
     y_flip: bool,
     x_flip: bool,
     dmg_palette: bool,
@@ -35,7 +35,7 @@ impl<'a> OamEntry<'a> {
     pub fn oam_flags(&self) -> OamFlags {
         let flags = self.data[3];
         OamFlags {
-            priority: (flags & 0x80 != 0),
+            low_priority: (flags & 0x80 != 0),
             y_flip: (flags & 0x40 != 0),
             x_flip: (flags & 0x20 != 0),
             dmg_palette: (flags & 0x10 != 0),
@@ -103,15 +103,34 @@ impl<'a> OamMap<'a> {
 
             let oam_pixels = oam.get_pixels(tiles, ly % 8);
 
-            if x < 8 {
-                // Clipped at beginning of line
-                pixels[..x].copy_from_slice(&oam_pixels[8 - x..]);
-            } else if x > 160 {
-                // Clipped at end of line
-                let b = 168 - x;
-                pixels[x - 8..].copy_from_slice(&oam_pixels[..b]);
+            let (dst, src) = {
+                if x < 8 {
+                    // Clipped at beginning of line
+                    (&mut pixels[..x], &oam_pixels[8 - x..])
+                    //pixels[..x].copy_from_slice(&oam_pixels[8 - x..]);
+                } else if x > 160 {
+                    // Clipped at end of line
+                    let b = 168 - x;
+                    (&mut pixels[x - 8..], &oam_pixels[..b])
+                    //pixels[x - 8..].copy_from_slice(&oam_pixels[..b]);
+                } else {
+                    (&mut pixels[x - 8..x], &oam_pixels[..])
+                    //pixels[x - 8..x].copy_from_slice(&oam_pixels);
+                }
+            };
+
+            assert!(dst.len() == src.len());
+
+            //TODO: Find a cleaner way to do this
+
+            if oam.oam_flags().low_priority {
+                for i in 0..dst.len() {
+                    if dst[i] == 0 {
+                        dst[i] = src[i];
+                    }
+                }
             } else {
-                pixels[x - 8..x].copy_from_slice(&oam_pixels);
+                dst.copy_from_slice(src);
             }
         }
 
@@ -149,7 +168,7 @@ impl<'a> Iterator for OamIter<'a> {
             // scrolling in from off screen.
             let adj_ly = self.ly.wrapping_add(16);
 
-            if adj_ly > tile_y_pos && self.ly < tile_y_pos + self.tile_height {
+            if adj_ly >= tile_y_pos && adj_ly <= tile_y_pos + self.tile_height {
                 self.cnt += 1;
                 return Some(oam_entry);
             }
@@ -176,7 +195,7 @@ mod tests {
         assert_eq!(oam.y_pos(), y_pos);
         assert_eq!(oam.tile_idx(), tile_idx);
         let flags = oam.oam_flags();
-        assert!(flags.priority);
+        assert!(flags.low_priority);
         assert!(flags.x_flip);
         assert!(flags.y_flip);
         assert!(flags.dmg_palette);
@@ -185,7 +204,7 @@ mod tests {
         let bytes = [y_pos, x_pos, tile_idx, attr];
         let oam = OamEntry::from_bytes(&bytes);
         let flags = oam.oam_flags();
-        assert!(!flags.priority);
+        assert!(!flags.low_priority);
         assert!(!flags.x_flip);
         assert!(!flags.y_flip);
         assert!(!flags.dmg_palette);
@@ -413,4 +432,31 @@ mod tests {
             [2, 2, 2, 2, 1, 1, 1, 1]
         );
     }
+
+
+    #[test]
+    fn oam_vert_spacing() {
+        let mut mem = [0; 0xA0];
+        mem[0] = 15;
+        mem[1] = 8;
+        mem[2] = 0;
+        mem[3] = 0x00; // just bit 5, x_flip
+        
+
+        let oam_exists = |ly| {
+            let oam_map = OamMap::from_mem(&mem);
+            let oam_iter = oam_map.iter(ly, false);
+            let oams: Vec<_> = oam_iter.collect();
+            oams.len() == 1
+        };
+
+        assert!(oam_exists(0));
+        assert!(oam_exists(1));
+        assert!(oam_exists(7));
+        //assert!(!oam_exists(8));
+        //assert!(!oam_exists(16));
+        assert!(!oam_exists(20));
+
+    }
+
 }

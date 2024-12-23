@@ -70,10 +70,18 @@ const HL_PTR: u8 = 6;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Reg {
-    B, C, D, E, H, L, A,
-    BC, DE, HL, SP,
+    B,
+    C,
+    D,
+    E,
+    H,
+    L,
+    A,
+    BC,
+    DE,
+    HL,
+    SP,
 }
-
 
 /*
  * TODO: Replace decode with this to save space?
@@ -109,7 +117,6 @@ pub enum Instruction2 {
     Undefined(u8),                     // For undefined opcodes
 }
 */
-
 
 #[derive(Debug, PartialEq)]
 enum Opcode {
@@ -171,9 +178,8 @@ pub struct Instr {
 impl<B: Bus> Cpu<B> {
     //TODO: Add an API to build the CPU in a state that
     //      does not skip the boot rom
-    
-    pub fn new(bus: B) -> Self {
 
+    pub fn new(bus: B) -> Self {
         Cpu {
             a: 0x01,
             b: 0x00,
@@ -193,7 +199,7 @@ impl<B: Bus> Cpu<B> {
             bus,
         }
 
-        // I don't remember exactly why this was 
+        // I don't remember exactly why this was
         // here, but I think this might be here
         // back when the PPU was just a bank of memory
         // and we needed 0xFF44 to always return 0x90
@@ -1995,7 +2001,7 @@ impl<B: Bus> Cpu<B> {
 
     pub fn get_next_instrs<const N: usize>(&mut self) -> [Instr; N] {
         let curr_pc = self.pc;
-        let instrs : [Instr; N] = core::array::from_fn(|_index| self.next_instr());
+        let instrs: [Instr; N] = core::array::from_fn(|_index| self.next_instr());
         self.pc = curr_pc;
         return instrs;
     }

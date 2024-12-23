@@ -4,8 +4,8 @@ use heapless::Vec;
 use crate::interrupts::{IntSource, InterruptController};
 use crate::joypad::Joypad;
 use crate::ppu::PPU;
-use crate::timer::Timer;
 use crate::rom::Rom;
+use crate::timer::Timer;
 
 pub trait Bus {
     fn write(&mut self, addr: u16, val: u8);
@@ -53,7 +53,7 @@ impl StaticBus {
             mapped_wram: [0; 0x1000],
             timer: Timer::new(),
             int_controller: InterruptController::new(),
-            joypad: Joypad::new(), 
+            joypad: Joypad::new(),
             io: [0; 0x80],
             hram: [0; 0x7F],
             passed_buf: Deque::new(),
@@ -87,7 +87,7 @@ impl Bus for StaticBus {
                 self.mapped_wram[addr as usize - 0xD000] = val;
             }
             0xE000..=0xFDFF => {
-                unreachable!("Attempting to write to echo ram! {addr}, {val}");
+                self.stats.echo += 1;
             }
             0xFE00..=0xFE9F => {
                 //OAM
