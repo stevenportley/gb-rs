@@ -211,14 +211,6 @@ impl<B: Bus> Cpu<B> {
         // cpu.bus.write(0xFF44, 0x90);
     }
 
-    fn get_f(&self) -> u8 {
-        let z = if self.z_f { 0x80 } else { 0 };
-        let n = if self.n_f { 0x40 } else { 0 };
-        let h = if self.h_f { 0x20 } else { 0 };
-        let c = if self.c_f { 0x10 } else { 0 };
-        return z | n | h | c;
-    }
-
     fn rreg8(&mut self, dst: u8) -> u8 {
         match dst {
             0 => return self.b,
@@ -987,28 +979,6 @@ impl<B: Bus> Cpu<B> {
 
         instr
     }
-
-    /*
-    pub fn log_state(&self) {
-        // This is formatted for use with gb doctor
-        // https://robertheaton.com/gameboy-doctor/
-        println!("A:{:02X} F:{:02X} B:{:02X} C:{:02X} D:{:02X} E:{:02X} H:{:02X} L:{:02X} SP:{:04X} PC:{:04X} PCMEM:{:02X},{:02X},{:02X},{:02X}",
-            self.a,
-            self.get_f(),
-            self.b,
-            self.c,
-            self.d,
-            self.e,
-            self.h,
-            self.l,
-            self.sp,
-            self.pc,
-            self.bus.read(self.pc),
-            self.bus.read(self.pc + 1),
-            self.bus.read(self.pc + 2),
-            self.bus.read(self.pc + 3));
-    }
-    */
 
     pub fn is_passed(&self) -> bool {
         return self.bus.is_passed();

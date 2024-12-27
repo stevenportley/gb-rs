@@ -1,3 +1,5 @@
+
+#[derive(Clone, Copy)]
 pub struct Tile<'a> {
     data: &'a [u8],
 }
@@ -26,6 +28,12 @@ impl<'a> Tile<'a> {
             self.data[(line_idx * 2) as usize],
             self.data[((line_idx * 2) + 1) as usize],
         )
+    }
+
+    pub fn render(&self) -> [[u8; 8]; 8] {
+        let tile: [[u8; 8]; 8] = core::array::from_fn(|index| self.pixel_buf(index as u8));
+
+        tile
     }
 }
 

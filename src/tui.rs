@@ -1,15 +1,11 @@
-use gb_rs::{gb::GbRs, joypad::JoypadDirection, joypad::JoypadInput};
-use ratatui::buffer::Cell;
-use ratatui::widgets::canvas::Context;
+use gb_rs::{gb::GbRs, joypad::JoypadDirection, joypad::JoypadInput, tile::Tile};
 use std::io;
 
-use std::io::stdout;
 use std::time::{Duration, Instant};
 
-use ratatui::layout::{Constraint, Layout, Position};
-use ratatui::{backend::CrosstermBackend, Terminal, TerminalOptions, Viewport};
+use ratatui::layout::{Constraint, Layout};
 
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
+use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use crossterm::event::{
     KeyboardEnhancementFlags, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
 };
@@ -18,8 +14,7 @@ use crossterm::execute;
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
-    style::{Color, Stylize},
-    symbols::border,
+    style::Color,
     text::{Line, Text},
     widgets::{
         canvas::{Canvas, Painter, Shape},
@@ -33,6 +28,7 @@ const SCREEN_HEIGHT: usize = 144;
 
 pub struct App {
     counter: u32,
+    halt: bool,
     exit: bool,
     gb: GbRs,
     frame_time: Duration,
@@ -48,7 +44,9 @@ impl App {
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
         while !self.exit {
             let before = Instant::now();
-            self.gb.run_frame();
+            if !self.halt {
+                self.gb.run_frame();
+            }
             self.emu_time = Instant::now() - before;
             terminal.draw(|frame| self.draw(frame))?;
             self.frame_time = Instant::now() - before;
@@ -71,11 +69,20 @@ impl App {
             .x_bounds([0.0, SCREEN_WIDTH as f64])
             .y_bounds([0.0, SCREEN_HEIGHT as f64]);
 
-        let horizontal = Layout::horizontal([Constraint::Length(SCREEN_WIDTH as u16), Constraint::Fill(1)]);
+        let horizontal =
+            Layout::horizontal([Constraint::Length(SCREEN_WIDTH as u16), Constraint::Fill(1)]);
         let [left, right] = horizontal.areas(frame.area());
 
-        let vertical = Layout::vertical([Constraint::Length(SCREEN_HEIGHT as u16 / 2), Constraint::Fill(1)]);
+        let sub_vert = Layout::vertical(Constraint::from_percentages([20, 80]));
+        let [top_right, bottom_right] = sub_vert.areas(right);
+
+
+        let vertical = Layout::vertical([
+            Constraint::Length(SCREEN_HEIGHT as u16 / 2),
+            Constraint::Fill(1),
+        ]);
         let [main, _] = vertical.areas(left);
+
 
         frame.render_widget(
             Block::bordered().title(format!(
@@ -85,6 +92,7 @@ impl App {
             )),
             right,
         );
+
         frame.render_widget(canvas, main);
 
         let joypad_state = self.gb.cpu.bus.joypad.get_state();
@@ -117,9 +125,19 @@ impl App {
                 Line::from(format!("{:?}", size_of::<GbRs>())),
                 Line::from(format!("FPS: {:?}", 1.0 / self.frame_time.as_secs_f64())),
                 Line::from(format!("Emu FPS: {:?}", 1.0 / self.emu_time.as_secs_f64())),
-            ]),
-            right,
-        )
+            ]), top_right);
+
+
+        frame.render_widget(OamWidget::new(&self.gb.cpu.bus.ppu), bottom_right);
+
+        /*
+        for oam in oams.get_oams_screen() {
+            let tile = self.gb.cpu.bus.ppu.get_sprite_tile(oam.tile_idx().into());
+            let oam_widget = OamWidget{ oams: *oam, tiles: tile };
+            frame.render_widget(oam_widget, bottom_right);
+        }
+        */
+
     }
 
     fn handle_events(&mut self) -> io::Result<()> {
@@ -146,6 +164,14 @@ impl App {
                     KeyCode::Char('k') => self.gb.cpu.bus.joypad.input(JoypadInput::A, dir),
                     KeyCode::Char('u') => self.gb.cpu.bus.joypad.input(JoypadInput::START, dir),
                     KeyCode::Char('i') => self.gb.cpu.bus.joypad.input(JoypadInput::SELECT, dir),
+                    KeyCode::Char('b') => self.halt = true,
+                    KeyCode::Char('c') => self.halt = false,
+                    KeyCode::Char('n') => {
+                        if key_event.kind == KeyEventKind::Press {
+                            self.halt = true;
+                            self.gb.run_frame();
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -155,18 +181,21 @@ impl App {
     }
 }
 
+fn to_color(color: u8) -> Color {
+    match color {
+        0 => Color::White,
+        1 => Color::Gray,
+        2 => Color::DarkGray,
+        3 => Color::Black,
+        _ => Color::Blue,
+    }
+}
+
 impl<'a> Shape for GameFrame<'a> {
     fn draw(&self, painter: &mut Painter<'_, '_>) {
         for y in 0..SCREEN_HEIGHT {
             for x in 0..SCREEN_WIDTH {
-                let color = match self.frame.buf[SCREEN_HEIGHT - y - 1][x] {
-                    0 => Color::White,
-                    1 => Color::Gray,
-                    2 => Color::DarkGray,
-                    3 => Color::Black,
-                    _ => Color::Blue,
-                };
-
+                let color = to_color(self.frame.buf[SCREEN_HEIGHT - y - 1][x]);
                 if let Some((x, y)) = painter.get_point(x as f64, y as f64) {
                     painter.paint(x, y, color);
                 }
@@ -175,11 +204,79 @@ impl<'a> Shape for GameFrame<'a> {
     }
 }
 
+
+struct OamWidget<'a> {
+    ppu: &'a gb_rs::ppu::PPU,
+}
+
+struct TileShape<'a> {
+    tile: Tile<'a>,
+}
+
+impl<'a> OamWidget<'a> {
+
+    fn new(ppu: &'a gb_rs::ppu::PPU) -> Self {
+        Self {
+            ppu,
+        }
+    }
+
+}
+
+impl Shape for TileShape<'_> {
+    fn draw(&self, painter: &mut Painter<'_, '_>) {
+        let oam_tile = self.tile.render();
+        for y in 0..8 {
+            for x in 0..8 {
+                if let Some((x2, y2)) = painter.get_point(x as f64, y as f64) {
+                    painter.paint(x2, y2, to_color(oam_tile[7 - y][x]));
+                }
+            }
+        }
+    }
+}
+
+impl Widget for OamWidget<'_> {
+
+    fn render(self, area: Rect, buf: &mut Buffer) {
+
+        let sprite_map = self.ppu.get_sprite_map();
+        let oams = sprite_map.get_oams_screen();
+
+
+        let vert = Layout::horizontal([Constraint::Length(8), Constraint::Fill(1)]).spacing(2);
+        let [left, _right] = vert.areas(area);
+
+        let contraints = Layout::vertical(Constraint::from_lengths(vec![8; oams.len() + 1])).spacing(2);
+
+        let slots = contraints.split(left);
+
+        for slot in slots.iter() {
+            let canvas = Canvas::default()
+                .marker(ratatui::symbols::Marker::HalfBlock)
+                .paint(|ctx| {
+                    let oam = oams.first();
+                    if let Some(data) = oam {
+                        let tile = self.ppu.get_sprite_tile(data.tile_idx().into());
+                        ctx.draw(&TileShape { tile });
+                    }
+                })
+            .x_bounds([0.0, 8 as f64])
+            .y_bounds([0.0, 8 as f64]);
+
+            canvas.render(*slot, buf);
+        }
+
+    }
+
+}
+
 pub fn run_tui(gb: GbRs) -> io::Result<()> {
     let mut app = App {
         counter: 0,
         exit: false,
         gb,
+        halt: true,
         frame_time: Duration::from_secs(1),
         emu_time: Duration::from_secs(1),
     };

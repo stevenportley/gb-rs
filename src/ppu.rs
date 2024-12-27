@@ -8,7 +8,6 @@ pub const NTILES: usize = 384;
 // The whole background
 pub const NUM_BACKGROUND_TILES: usize = 32 * 32;
 
-
 const BKG_WIDTH: usize = 256;
 const SCREEN_WIDTH: usize = 160;
 const SCREEN_HEIGHT: usize = 144;
@@ -234,6 +233,15 @@ impl PPU {
         self.screen.to_rgba()
     }
 
+    pub fn get_sprite_map(&self) -> OamMap {
+        OamMap::from_mem(&self.oam)
+    }
+
+    pub fn get_sprite_tile(&self, tile_index: usize) -> Tile {
+        let vram_index = tile_index * 16;
+        Tile::from_bytes(&self.vram[vram_index..vram_index + 16])
+    }
+
     pub fn run(&mut self, cycles: i32) -> Option<IntSource> {
         if cycles < self.r_cyc {
             self.r_cyc = self.r_cyc - cycles;
@@ -258,33 +266,27 @@ impl PPU {
                 let bg_line = self.render_bg_line(self.ly);
 
                 let scx = self.scx as usize;
-                let ly = self.ly as usize;
+                let ly = self.ly.wrapping_add(self.scy) as usize % 144;
 
-/*
+                //TODO: Cleaner way to do this?
                 if scx + 160 > 255 {
                     let first_cpy_len = bg_line[scx..].len() as usize;
                     self.screen.buf[ly][0..first_cpy_len].copy_from_slice(&bg_line[scx..]);
-                    self.screen.buf[ly][first_cpy_len..].copy_from_slice(&bg_line[..160 - first_cpy_len]);
+                    self.screen.buf[ly][first_cpy_len..]
+                        .copy_from_slice(&bg_line[..160 - first_cpy_len]);
                 } else {
-                    self.screen.buf[ly].copy_from_slice(&bg_line[scx..scx+160]);
+                    self.screen.buf[ly].copy_from_slice(&bg_line[scx..scx + 160]);
                 }
-*/
-                self.screen.buf[ly].copy_from_slice(&bg_line[..160]);
 
                 if self.obj_en() {
                     let oam_map = OamMap::from_mem(&self.oam);
 
                     let sprite_tiles: [Tile; 256] = core::array::from_fn(|tile_index| {
-                        let index = tile_index * 16;
-                        return Tile::from_bytes(&self.vram[index..index + 16]);
+                        let vram_index = tile_index * 16;
+                        Tile::from_bytes(&self.vram[vram_index..vram_index + 16])
                     });
 
-                    oam_map.render_line(
-                        &mut self.screen.buf[ly],
-                        &sprite_tiles,
-                        self.ly,
-                        false,
-                    );
+                    oam_map.render_line(&mut self.screen.buf[ly], &sprite_tiles, self.ly, false);
                 }
 
                 // TODO: Use actual timing, not just 51

@@ -6,7 +6,11 @@ mod tui;
 
 fn main() -> std::io::Result<()> {
     //let gb = GbRs::new(Rom::acid_cart());
-    let gb = GbRs::new(Rom::tetris_cart());
+    let rom_path = std::path::Path::new("roms/tetris.gb");
+    let rom = std::fs::read(rom_path).expect("Unable to load test rom: {rom_path}");
+    let rom = Rom::from_slice(&rom.as_slice()[0..0x8000]);
+
+    let gb = GbRs::new(rom);
 
     tui::run_tui(gb)?;
     /*

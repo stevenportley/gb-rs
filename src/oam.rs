@@ -1,3 +1,4 @@
+use heapless::Vec;
 use crate::tile::Tile;
 
 pub struct OamEntry<'a> {
@@ -76,24 +77,67 @@ impl<'a> OamMap<'a> {
         Self { oam_entries }
     }
 
-    pub fn iter(&self, ly: u8, large_tiles: bool) -> OamIter {
-        OamIter {
-            oam_iter: self.oam_entries.iter(),
-            ly,
-            // TODO: We assume LCDC bit 2
-            // denotes only one tile in height,
-            // this should actually be read from the register
-            tile_height: if large_tiles { 16 } else { 8 },
-            cnt: 0,
+    pub fn get_oams_line(&self, ly: u8, large_tiles: bool) -> Vec<&OamEntry, 10> {
+        // The PPU only generates the first 10
+
+        let mut oams = Vec::new();
+        let tile_height = if large_tiles { 16 } else { 8 };
+
+        for oam_entry in &self.oam_entries {
+
+            if oams.is_full() {
+                return oams;
+            }
+
+            let tile_y_pos = oam_entry.y_pos();
+
+            if tile_y_pos == 0 || tile_y_pos >= 160 {
+                // Tile is off screen
+                continue;
+            }
+
+            // The Y coordinate of the OAM entry is
+            // the screen coordinate + 16.  This allows
+            // scrolling in from off screen.
+            let adj_ly = ly.wrapping_add(16);
+
+            if adj_ly >= tile_y_pos && adj_ly <= tile_y_pos + tile_height {
+                let _ = oams.push(oam_entry);
+            }
         }
+
+        oams
     }
+
+    pub fn get_oams_screen(&self) -> Vec<&OamEntry, 20> {
+        let mut oams = Vec::new();
+
+        for oam_entry in &self.oam_entries {
+
+            if oams.is_full() {
+                return oams;
+            }
+
+            let tile_y_pos = oam_entry.y_pos();
+            if tile_y_pos == 0 || tile_y_pos >= 160 {
+                // Tile is off screen
+                continue;
+            }
+
+            let _ = oams.push(oam_entry);
+            
+        }
+
+        oams
+    }
+
 
     pub fn render_line(&self, pixels: &mut [u8], tiles: &[Tile], ly: u8, large_tiles: bool) -> u32 {
         assert_eq!(pixels.len(), 160);
 
-        let mut oam_iter = self.iter(ly, large_tiles);
+        let oams = self.get_oams_line(ly, large_tiles);
 
-        while let Some(oam) = oam_iter.next() {
+        for oam in oams {
             let x = oam.x_pos() as usize;
 
             if x == 0 || x >= 168 {
@@ -139,45 +183,6 @@ impl<'a> OamMap<'a> {
     }
 }
 
-pub struct OamIter<'a> {
-    oam_iter: core::slice::Iter<'a, OamEntry<'a>>,
-    ly: u8,
-    tile_height: u8,
-    cnt: usize,
-}
-
-impl<'a> Iterator for OamIter<'a> {
-    type Item = &'a OamEntry<'a>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        // The PPU only generates the first 10
-        if self.cnt == 10 {
-            return None;
-        }
-
-        while let Some(oam_entry) = self.oam_iter.next() {
-            let tile_y_pos = oam_entry.y_pos();
-
-            if tile_y_pos == 0 || tile_y_pos >= 160 {
-                // Tile is off screen
-                continue;
-            }
-
-            // The Y coordinate of the OAM entry is
-            // the screen coordinate + 16.  This allows
-            // scrolling in from off screen.
-            let adj_ly = self.ly.wrapping_add(16);
-
-            if adj_ly >= tile_y_pos && adj_ly <= tile_y_pos + self.tile_height {
-                self.cnt += 1;
-                return Some(oam_entry);
-            }
-        }
-
-        None
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -208,41 +213,6 @@ mod tests {
         assert!(!flags.x_flip);
         assert!(!flags.y_flip);
         assert!(!flags.dmg_palette);
-    }
-
-    #[test]
-    fn oam_iterator_basic() {
-        let mut mem = [0; 0xA0];
-
-        // For 3 OAM entries, set Y to 0xAB
-        mem[40] = 10;
-        mem[41] = 0x00;
-        mem[42] = 0x00;
-
-        mem[44] = 10;
-        mem[45] = 0x10;
-        mem[46] = 0x10;
-
-        mem[48] = 10;
-        mem[49] = 0x20;
-        mem[50] = 0x20;
-
-        let oam_map = OamMap::from_mem(&mem);
-        let oam_iter = oam_map.iter(0, false);
-
-        let oams: Vec<_> = oam_iter.collect();
-        assert_eq!(oams.len(), 3);
-        assert_eq!(oams[0].y_pos(), 10);
-        assert_eq!(oams[1].y_pos(), 10);
-        assert_eq!(oams[2].y_pos(), 10);
-
-        assert_eq!(oams[0].x_pos(), 0x00);
-        assert_eq!(oams[1].x_pos(), 0x10);
-        assert_eq!(oams[2].x_pos(), 0x20);
-
-        assert_eq!(oams[0].tile_idx(), 0x00);
-        assert_eq!(oams[1].tile_idx(), 0x10);
-        assert_eq!(oams[2].tile_idx(), 0x20);
     }
 
     fn get_test_tiles() -> [Tile<'static>; 4] {
@@ -297,9 +267,8 @@ mod tests {
         mem[14] = 3;
 
         let oam_map = OamMap::from_mem(&mem);
-        let oam_iter = oam_map.iter(0, false);
+        let oams = oam_map.get_oams_screen();
 
-        let oams: Vec<_> = oam_iter.collect();
         assert_eq!(oams.len(), 4);
 
         let mut pixels = [0; 160];
@@ -315,9 +284,8 @@ mod tests {
     fn oam_blank() {
         let mem = [0; 0xA0];
         let oam_map = OamMap::from_mem(&mem);
-        let oam_iter = oam_map.iter(0, false);
+        let oams = oam_map.get_oams_screen();
 
-        let oams: Vec<_> = oam_iter.collect();
         assert_eq!(oams.len(), 0);
 
         let mut pixels = [0; 160];
@@ -333,9 +301,8 @@ mod tests {
         mem[10] = 2;
 
         let oam_map = OamMap::from_mem(&mem);
-        let oam_iter = oam_map.iter(0, false);
+        let oams = oam_map.get_oams_screen();
 
-        let oams: Vec<_> = oam_iter.collect();
         assert_eq!(oams.len(), 1);
 
         let mut pixels = [0; 160];
@@ -353,9 +320,8 @@ mod tests {
         mem[10] = 1;
 
         let oam_map = OamMap::from_mem(&mem);
-        let oam_iter = oam_map.iter(0, false);
+        let oams = oam_map.get_oams_screen();
 
-        let oams: Vec<_> = oam_iter.collect();
         assert_eq!(oams.len(), 1);
 
         let mut pixels = [0; 160];
@@ -373,9 +339,7 @@ mod tests {
         mem[10] = 1;
 
         let oam_map = OamMap::from_mem(&mem);
-        let oam_iter = oam_map.iter(0, false);
-
-        let oams: Vec<_> = oam_iter.collect();
+        let oams = oam_map.get_oams_screen();
         assert_eq!(oams.len(), 1);
 
         let mut pixels = [0; 160];
@@ -394,9 +358,8 @@ mod tests {
         mem[11] = 0x40; // just bit 6, y_flip
 
         let oam_map = OamMap::from_mem(&mem);
-        let oam_iter = oam_map.iter(0, false);
+        let oams = oam_map.get_oams_screen();
 
-        let oams: Vec<_> = oam_iter.collect();
         assert_eq!(oams.len(), 1);
 
         assert_eq!(
@@ -418,9 +381,7 @@ mod tests {
         mem[11] = 0x20; // just bit 5, x_flip
 
         let oam_map = OamMap::from_mem(&mem);
-        let oam_iter = oam_map.iter(0, false);
-
-        let oams: Vec<_> = oam_iter.collect();
+        let oams = oam_map.get_oams_screen();
         assert_eq!(oams.len(), 1);
 
         assert_eq!(
@@ -433,7 +394,6 @@ mod tests {
         );
     }
 
-
     #[test]
     fn oam_vert_spacing() {
         let mut mem = [0; 0xA0];
@@ -441,12 +401,10 @@ mod tests {
         mem[1] = 8;
         mem[2] = 0;
         mem[3] = 0x00; // just bit 5, x_flip
-        
 
         let oam_exists = |ly| {
             let oam_map = OamMap::from_mem(&mem);
-            let oam_iter = oam_map.iter(ly, false);
-            let oams: Vec<_> = oam_iter.collect();
+            let oams = oam_map.get_oams_line(ly, false);
             oams.len() == 1
         };
 
@@ -456,7 +414,5 @@ mod tests {
         //assert!(!oam_exists(8));
         //assert!(!oam_exists(16));
         assert!(!oam_exists(20));
-
     }
-
 }
