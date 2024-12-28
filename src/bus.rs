@@ -7,9 +7,12 @@ use crate::ppu::PPU;
 use crate::rom::Rom;
 use crate::timer::Timer;
 
-pub trait Bus {
+pub trait Device {
     fn write(&mut self, addr: u16, val: u8);
     fn read(&self, addr: u16) -> u8;
+}
+
+pub trait Bus: Device {
     fn run_cycles(&mut self, cycles: u16);
     fn query_interrupt(&mut self) -> Option<IntSource>;
     // TODO: Remove this API and make `query_interrupt` automatically clear
@@ -29,7 +32,7 @@ struct BusStats {
 }
 
 pub struct StaticBus {
-    rom: Rom,
+    pub rom: Rom,
     pub ppu: PPU,
     eram: [u8; 0x2000],
     wram: [u8; 0x1000],
@@ -68,7 +71,7 @@ impl StaticBus {
     }
 }
 
-impl Bus for StaticBus {
+impl Device for StaticBus {
     fn write(&mut self, addr: u16, val: u8) {
         match addr {
             0..=0x7FFF => {
@@ -203,7 +206,9 @@ impl Bus for StaticBus {
             }
         }
     }
+}
 
+impl Bus for StaticBus {
     fn query_interrupt(&mut self) -> Option<IntSource> {
         self.int_controller.next()
     }

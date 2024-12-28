@@ -1,5 +1,5 @@
-use heapless::Vec;
 use crate::tile::Tile;
+use heapless::Vec;
 
 pub struct OamEntry<'a> {
     data: &'a [u8],
@@ -81,12 +81,13 @@ impl<'a> OamMap<'a> {
         // The PPU only generates the first 10
 
         let mut oams = Vec::new();
+
+        assert!(!large_tiles);
         let tile_height = if large_tiles { 16 } else { 8 };
 
         for oam_entry in &self.oam_entries {
-
             if oams.is_full() {
-                return oams;
+                break;
             }
 
             let tile_y_pos = oam_entry.y_pos();
@@ -99,13 +100,14 @@ impl<'a> OamMap<'a> {
             // The Y coordinate of the OAM entry is
             // the screen coordinate + 16.  This allows
             // scrolling in from off screen.
-            let adj_ly = ly.wrapping_add(16);
+            let adj_ly = ly + 16;
 
-            if adj_ly >= tile_y_pos && adj_ly <= tile_y_pos + tile_height {
+            if adj_ly >= tile_y_pos && adj_ly < tile_y_pos + tile_height {
                 let _ = oams.push(oam_entry);
             }
         }
 
+        oams.sort_unstable_by(|l, r| r.x_pos().cmp(&l.x_pos()));
         oams
     }
 
@@ -113,7 +115,6 @@ impl<'a> OamMap<'a> {
         let mut oams = Vec::new();
 
         for oam_entry in &self.oam_entries {
-
             if oams.is_full() {
                 return oams;
             }
@@ -125,12 +126,10 @@ impl<'a> OamMap<'a> {
             }
 
             let _ = oams.push(oam_entry);
-            
         }
 
         oams
     }
-
 
     pub fn render_line(&self, pixels: &mut [u8], tiles: &[Tile], ly: u8, large_tiles: bool) -> u32 {
         assert_eq!(pixels.len(), 160);
@@ -145,7 +144,11 @@ impl<'a> OamMap<'a> {
                 continue;
             }
 
-            let oam_pixels = oam.get_pixels(tiles, ly % 8);
+            // Shift LY to sprite y_pos space,
+            // it's offset by 16 to allow scrolling in 
+            let sprite_offset = (ly + 16) - oam.y_pos();
+
+            let oam_pixels = oam.get_pixels(tiles, sprite_offset);
 
             let (dst, src) = {
                 if x < 8 {
@@ -174,7 +177,11 @@ impl<'a> OamMap<'a> {
                     }
                 }
             } else {
-                dst.copy_from_slice(src);
+                for i in 0..dst.len() {
+                    if src[i] != 0 {
+                        dst[i] = src[i];
+                    }
+                }
             }
         }
 

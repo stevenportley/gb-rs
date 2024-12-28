@@ -8,9 +8,9 @@ pub const NTILES: usize = 384;
 // The whole background
 pub const NUM_BACKGROUND_TILES: usize = 32 * 32;
 
-const BKG_WIDTH: usize = 256;
-const SCREEN_WIDTH: usize = 160;
-const SCREEN_HEIGHT: usize = 144;
+pub const BKG_WIDTH: usize = 256;
+pub const SCREEN_WIDTH: usize = 160;
+pub const SCREEN_HEIGHT: usize = 144;
 
 const VRAM_LEN: usize = 0x2000;
 const OAM_LEN: usize = 0xA0;
@@ -191,11 +191,18 @@ impl PPU {
         pixels
     }
 
+    pub fn render_bg(&self) -> [[u8; BKG_WIDTH]; BKG_WIDTH] {
+        let bkg: [[u8; BKG_WIDTH]; BKG_WIDTH] =
+            core::array::from_fn(|index| self.render_bg_line(index as u8));
+
+        bkg
+    }
+
     fn obj_en(&self) -> bool {
         self.lcdc & 0x2 != 0
     }
 
-    fn bkgr_start_addr(&self) -> usize {
+    fn bkgr_map_start_addr(&self) -> usize {
         if self.lcdc & 0x8 == 0 {
             return 0x9800;
         } else {
@@ -208,22 +215,42 @@ impl PPU {
         return [val, val, val, 0xFF];
     }
 
+    /*
     pub fn dump_vram(&self) -> [Tile; NTILES] {
-        let tiles: [Tile; NTILES] = core::array::from_fn(|index| self.from_tile_index(index));
+        let tiles: [Tile; NTILES] = core::array::from_fn(|index| self.from_bkgr_til_index(index));
 
         return tiles;
     }
+    */
 
-    pub fn from_tile_index(&self, tile_index: usize) -> Tile {
+    pub fn bkgr_tile(&self, tile_index: u8) -> Tile {
+        if self.lcdc & 0x10 == 0 {
+            if tile_index < 128 {
+                let tile_data = &self.vram[0x1000..0x1800];
+                let tile_index = tile_index as usize * 16;
+                Tile::from_bytes(&tile_data[tile_index..tile_index + 16])
+            } else {
+                let tile_data = &self.vram[0x0800..0x1000];
+                let tile_index = (tile_index - 128) as usize * 16;
+                Tile::from_bytes(&tile_data[tile_index..tile_index + 16])
+            }
+        } else {
+            let tile_data = &self.vram[..0x1000];
+            let tile_index = tile_index as usize * 16;
+            Tile::from_bytes(&tile_data[tile_index..tile_index + 16])
+        }
+    }
+
+    pub fn from_oam_tile_index(&self, tile_index: usize) -> Tile {
         let index = tile_index * 16;
         return Tile::from_bytes(&self.vram[index..index + 16]);
     }
 
     pub fn get_background(&self) -> [Tile; NUM_BACKGROUND_TILES] {
         let tiles: [Tile; NUM_BACKGROUND_TILES] = core::array::from_fn(|index| {
-            let tilemap_index = index + self.bkgr_start_addr() - 0x8000;
+            let tilemap_index = index + self.bkgr_map_start_addr() - 0x8000;
             let tile_index = self.vram[tilemap_index];
-            self.from_tile_index(tile_index as usize)
+            self.bkgr_tile(tile_index)
         });
 
         tiles
@@ -263,10 +290,10 @@ impl PPU {
                 // TODO: update line
                 // TODO: Incorproate SCX
 
-                let bg_line = self.render_bg_line(self.ly);
+                let bg_line = self.render_bg_line(self.ly.wrapping_add(self.scy));
+                let ly = self.ly as usize;
 
                 let scx = self.scx as usize;
-                let ly = self.ly.wrapping_add(self.scy) as usize % 144;
 
                 //TODO: Cleaner way to do this?
                 if scx + 160 > 255 {

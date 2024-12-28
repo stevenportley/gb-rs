@@ -1,4 +1,3 @@
-
 #[derive(Clone, Copy)]
 pub struct Tile<'a> {
     data: &'a [u8],
