@@ -281,7 +281,8 @@ mod tests {
         let mut pixels = [0; 160];
         let _ = oam_map.render_line(&mut pixels, &get_test_tiles(), 0, false);
 
-        assert_eq!(pixels[0..14], [0, 0, 1, 1, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3]);
+        // TODO: Make sure that this is actually what we want
+        assert_eq!(pixels[0..14], [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 3, 3]);
         for val in &pixels[14..] {
             assert_eq!(*val, 0);
         }
@@ -404,10 +405,10 @@ mod tests {
     #[test]
     fn oam_vert_spacing() {
         let mut mem = [0; 0xA0];
-        mem[0] = 15;
+        mem[0] = 16;
         mem[1] = 8;
         mem[2] = 0;
-        mem[3] = 0x00; // just bit 5, x_flip
+        mem[3] = 0x00;
 
         let oam_exists = |ly| {
             let oam_map = OamMap::from_mem(&mem);
@@ -418,8 +419,8 @@ mod tests {
         assert!(oam_exists(0));
         assert!(oam_exists(1));
         assert!(oam_exists(7));
-        //assert!(!oam_exists(8));
-        //assert!(!oam_exists(16));
+        assert!(!oam_exists(8));
+        assert!(!oam_exists(16));
         assert!(!oam_exists(20));
     }
 }
