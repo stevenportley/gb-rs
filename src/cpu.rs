@@ -68,7 +68,7 @@ const HL_REG: u8 = 2;
 
 const HL_PTR: u8 = 6;
 
-#[derive(Debug, Copy)]
+#[derive(Debug)]
 pub enum Reg {
     B,
     C,
