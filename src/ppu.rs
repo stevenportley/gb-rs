@@ -15,8 +15,8 @@ pub const SCREEN_HEIGHT: usize = 144;
 const VRAM_LEN: usize = 0x2000;
 const OAM_LEN: usize = 0xA0;
 
-#[derive(Clone, Copy)]
-enum PpuMode {
+#[derive(Clone, Copy, Debug)]
+pub enum PpuMode {
     HBLANK = 0,
     VBLANK = 1,
     OAMSCAN = 2,
@@ -40,6 +40,29 @@ pub struct PPU {
     mode: PpuMode,
     r_cyc: i32,
     pub screen: Frame,
+}
+
+#[derive(Debug)]
+pub struct Lcdc {
+    pub lcd_en: bool,
+    pub window_tile_map: bool,
+    pub window_en: bool,
+    pub bg_wind_tile_data: bool,
+    pub bg_tile_map: bool,
+    pub large_sprite: bool,
+    pub obj_en: bool,
+    pub bg_wind_en: bool,
+}
+
+#[derive(Debug)]
+pub struct PpuState {
+    pub lcdc: Lcdc,
+    pub scx: u8,
+    pub scy: u8,
+    pub ly: u8,
+    pub mode: PpuMode,
+    pub lyc: u8,
+    pub stat: u8
 }
 
 impl PPU {
@@ -235,6 +258,7 @@ impl PPU {
                 Tile::from_bytes(&tile_data[tile_index..tile_index + 16])
             }
         } else {
+            //assert!(false);
             let tile_data = &self.vram[..0x1000];
             let tile_index = tile_index as usize * 16;
             Tile::from_bytes(&tile_data[tile_index..tile_index + 16])
@@ -376,6 +400,32 @@ impl PPU {
     fn get_stat(&self) -> u8 {
         let base = self.stat & !0x7;
         return base | self.mode as u8 | if self.ly == self.lyc { 0x6 } else { 0 };
+    }
+
+    fn get_lcdc_state(&self) -> Lcdc {
+
+        Lcdc {
+            lcd_en: self.lcdc & 0x80 != 0,
+            window_tile_map: self.lcdc & 0x40 != 0,
+            window_en: self.lcdc & 0x20 != 0,
+            bg_wind_tile_data: self.lcdc & 0x10 != 0,
+            bg_tile_map: self.lcdc & 0x08 != 0,
+            large_sprite: self.lcdc & 0x04 != 0,
+            obj_en: self.lcdc & 0x02 != 0,
+            bg_wind_en: self.lcdc & 0x01 != 0,
+        }
+    }
+
+    pub fn get_ppu_state(&self) -> PpuState {
+        PpuState {
+            lcdc: self.get_lcdc_state(),
+            scx: self.scx,
+            scy: self.scy,
+            ly: self.ly,
+            lyc: self.lyc,
+            mode: self.mode,
+            stat: self.stat,
+        }
     }
 }
 

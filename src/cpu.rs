@@ -68,7 +68,7 @@ const HL_REG: u8 = 2;
 
 const HL_PTR: u8 = 6;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Copy)]
 pub enum Reg {
     B,
     C,
@@ -334,7 +334,7 @@ impl<B: Bus> Cpu<B> {
             _ => unreachable!("rr16mem with invalid bit index! {r16mem}"),
         }
     }
-
+    
     fn push_stack(&mut self, val: u16) {
         self.sp = self.sp - 1;
         self.bus.write(self.sp, (val >> 8) as u8);

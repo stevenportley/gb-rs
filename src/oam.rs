@@ -145,7 +145,7 @@ impl<'a> OamMap<'a> {
             }
 
             // Shift LY to sprite y_pos space,
-            // it's offset by 16 to allow scrolling in 
+            // it's offset by 16 to allow scrolling in
             let sprite_offset = (ly + 16) - oam.y_pos();
 
             let oam_pixels = oam.get_pixels(tiles, sprite_offset);

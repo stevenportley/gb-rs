@@ -119,7 +119,20 @@ impl App {
         }
 
         let joypad_state = self.gb.cpu.bus.joypad.get_state();
-        frame.render_widget(Text::from(format!("{}", joypad_state)), bot_left);
+        let ppu_state = self.gb.cpu.bus.ppu.get_ppu_state();
+        frame.render_widget(
+            Paragraph::new(vec![
+                Line::from(format!("{}", joypad_state)),
+                Line::from(format!("LCDC: {:?}", ppu_state.lcdc)),
+                Line::from(format!("SCX: {:?}", ppu_state.scx)),
+                Line::from(format!("SCY: {:?}", ppu_state.scy)),
+                Line::from(format!("LY: {:?}", ppu_state.ly)),
+                Line::from(format!("LYC: {:?}", ppu_state.lyc)),
+                Line::from(format!("MODE: {:?}", ppu_state.mode)),
+                Line::from(format!("STAT: {:?}", ppu_state.stat)),
+            ]),
+            bot_left,
+        );
 
         let instr_trace = self.gb.cpu.get_next_instrs::<20>();
 
@@ -181,6 +194,12 @@ impl App {
                         if key_event.kind == KeyEventKind::Press {
                             self.halt = true;
                             self.gb.run_frame();
+                        }
+                    }
+                    KeyCode::Char('l') => {
+                        if key_event.kind == KeyEventKind::Press {
+                            self.halt = true;
+                            self.gb.run_line();
                         }
                     }
                     _ => {}
