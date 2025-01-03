@@ -1954,6 +1954,7 @@ impl<B: Bus> Cpu<B> {
     }
 
     pub fn handle_interrupt(&mut self, int_source: IntSource) -> usize {
+
         self.ime = false;
         self.push_stack(self.pc);
 

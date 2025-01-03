@@ -48,6 +48,10 @@ struct Background<'a> {
     ppu: &'a gb_rs::ppu::PPU,
 }
 
+struct BkWindow<'a> {
+    ppu: &'a gb_rs::ppu::PPU,
+}
+
 impl App {
     /// runs the application's main loop until the user quits
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
@@ -102,7 +106,7 @@ impl App {
                 .y_bounds([0.0, SCREEN_HEIGHT as f64]);
 
             frame.render_widget(canvas, main);
-        } else {
+        } else if self.tab == 2 {
             let canvas = Canvas::default()
                 //.block(Block::bordered())
                 .marker(ratatui::symbols::Marker::HalfBlock)
@@ -116,6 +120,21 @@ impl App {
                 .y_bounds([0.0, BKG_WIDTH as f64]);
 
             frame.render_widget(canvas, main);
+        } else {
+            let canvas = Canvas::default()
+                //.block(Block::bordered())
+                .marker(ratatui::symbols::Marker::HalfBlock)
+                .paint(|ctx| {
+                    let window = BkWindow {
+                        ppu: &self.gb.cpu.bus.ppu,
+                    };
+                    ctx.draw(&window);
+                })
+                .x_bounds([0.0, BKG_WIDTH as f64])
+                .y_bounds([0.0, BKG_WIDTH as f64]);
+
+            frame.render_widget(canvas, main);
+
         }
 
         let joypad_state = self.gb.cpu.bus.joypad.get_state();
@@ -123,7 +142,6 @@ impl App {
         frame.render_widget(
             Paragraph::new(vec![
                 Line::from(format!("{}", joypad_state)),
-                Line::from(format!("LCDC: {:?}", ppu_state.lcdc)),
                 Line::from(format!("SCX: {:?}", ppu_state.scx)),
                 Line::from(format!("SCY: {:?}", ppu_state.scy)),
                 Line::from(format!("LY: {:?}", ppu_state.ly)),
@@ -147,6 +165,7 @@ impl App {
                 Line::from(format!("FPS: {:?}", 1.0 / self.frame_time.as_secs_f64())),
                 Line::from(format!("Emu FPS: {:?}", 1.0 / self.emu_time.as_secs_f64())),
                 Line::from(format!("Cartridge: {:?}", self.gb.cpu.bus.rom.get_header())),
+                Line::from(format!("LCDC: {:?}", ppu_state.lcdc)),
             ]),
             top_right,
         );
@@ -179,6 +198,7 @@ impl App {
                 match key_event.code {
                     KeyCode::Char('1') => self.tab = 1,
                     KeyCode::Char('2') => self.tab = 2,
+                    KeyCode::Char('3') => self.tab = 3,
                     KeyCode::Char('q') => self.exit = true,
                     KeyCode::Char('w') => self.gb.cpu.bus.joypad.input(JoypadInput::UP, dir),
                     KeyCode::Char('a') => self.gb.cpu.bus.joypad.input(JoypadInput::LEFT, dir),
@@ -190,10 +210,16 @@ impl App {
                     KeyCode::Char('i') => self.gb.cpu.bus.joypad.input(JoypadInput::SELECT, dir),
                     KeyCode::Char('b') => self.halt = true,
                     KeyCode::Char('c') => self.halt = false,
-                    KeyCode::Char('n') => {
+                    KeyCode::Char('f') => {
                         if key_event.kind == KeyEventKind::Press {
                             self.halt = true;
                             self.gb.run_frame();
+                        }
+                    }
+                    KeyCode::Char('n') => {
+                        if key_event.kind == KeyEventKind::Press {
+                            self.halt = true;
+                            self.gb.run_one();
                         }
                     }
                     KeyCode::Char('l') => {
@@ -237,6 +263,20 @@ impl<'a> Shape for GameFrame<'a> {
 impl<'a> Shape for Background<'a> {
     fn draw(&self, painter: &mut Painter<'_, '_>) {
         let bkgr = self.ppu.render_bg();
+        for y in 0..BKG_WIDTH {
+            for x in 0..BKG_WIDTH {
+                let color = to_color(bkgr[BKG_WIDTH - y - 1][x]);
+                if let Some((x, y)) = painter.get_point(x as f64, y as f64) {
+                    painter.paint(x, y, color);
+                }
+            }
+        }
+    }
+}
+
+impl<'a> Shape for BkWindow<'a> {
+    fn draw(&self, painter: &mut Painter<'_, '_>) {
+        let bkgr = self.ppu.render_window();
         for y in 0..BKG_WIDTH {
             for x in 0..BKG_WIDTH {
                 let color = to_color(bkgr[BKG_WIDTH - y - 1][x]);
