@@ -44,9 +44,20 @@ impl<'a> OamEntry<'a> {
         }
     }
 
-    pub fn get_pixels(&self, tiles: &[Tile], mut line_idx: u8) -> [u8; 8] {
+    pub fn get_pixels(&self, tiles: &[Tile], mut line_idx: u8, large_tiles: bool) -> [u8; 8] {
+
         let flags = self.oam_flags();
-        let tile_idx = self.tile_idx();
+        let mut tile_idx = self.tile_idx();
+
+        if large_tiles {
+            if line_idx >= 8 {
+                tile_idx = tile_idx & 0xFE;
+                line_idx -= 8;
+            } else {
+                tile_idx = tile_idx | 0x01;
+            }
+        }
+
         let tile = &tiles[tile_idx as usize];
 
         if flags.y_flip {
@@ -82,7 +93,6 @@ impl<'a> OamMap<'a> {
 
         let mut oams = Vec::new();
 
-        assert!(!large_tiles);
         let tile_height = if large_tiles { 16 } else { 8 };
 
         for oam_entry in &self.oam_entries {
@@ -148,7 +158,7 @@ impl<'a> OamMap<'a> {
             // it's offset by 16 to allow scrolling in
             let sprite_offset = (ly + 16) - oam.y_pos();
 
-            let oam_pixels = oam.get_pixels(tiles, sprite_offset);
+            let oam_pixels = oam.get_pixels(tiles, sprite_offset, large_tiles);
 
             let (dst, src) = {
                 if x < 8 {
@@ -371,11 +381,11 @@ mod tests {
         assert_eq!(oams.len(), 1);
 
         assert_eq!(
-            oams[0].get_pixels(&[get_weird_tile()], 0),
+            oams[0].get_pixels(&[get_weird_tile()], 0, false),
             [1, 1, 1, 1, 2, 2, 2, 2]
         );
         assert_eq!(
-            oams[0].get_pixels(&[get_weird_tile()], 7),
+            oams[0].get_pixels(&[get_weird_tile()], 7, false),
             [0, 0, 0, 0, 3, 3, 3, 3]
         );
     }
@@ -393,11 +403,11 @@ mod tests {
         assert_eq!(oams.len(), 1);
 
         assert_eq!(
-            oams[0].get_pixels(&[get_weird_tile()], 0),
+            oams[0].get_pixels(&[get_weird_tile()], 0, false),
             [3, 3, 3, 3, 0, 0, 0, 0]
         );
         assert_eq!(
-            oams[0].get_pixels(&[get_weird_tile()], 7),
+            oams[0].get_pixels(&[get_weird_tile()], 7, false),
             [2, 2, 2, 2, 1, 1, 1, 1]
         );
     }

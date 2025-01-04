@@ -4,8 +4,8 @@ use gb_rs::{
     joypad::JoypadDirection,
     joypad::JoypadInput,
     ppu::{BKG_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH},
+    rom::Rom,
     tile::Tile,
-    rom::Rom
 };
 use std::io;
 
@@ -23,7 +23,7 @@ use ratatui::{
     buffer::Buffer,
     layout::Rect,
     style::Color,
-    text::{Line, Text},
+    text::Line,
     widgets::{
         canvas::{Canvas, Painter, Shape},
         Block, Paragraph, Widget,
@@ -36,7 +36,7 @@ pub struct App {
     halt: bool,
     exit: bool,
     gb: GbRs,
-    frame_time: Duration,
+    draw_time: Duration,
     emu_time: Duration,
     tab: u8,
 }
@@ -61,9 +61,10 @@ impl App {
             if !self.halt {
                 self.gb.run_frame();
             }
-            self.emu_time = Instant::now() - before;
+            let after = Instant::now();
+            self.emu_time = after.duration_since(before);
             terminal.draw(|frame| self.draw(frame))?;
-            self.frame_time = Instant::now() - before;
+            self.draw_time = Instant::now() - after;
             self.handle_events()?;
             self.counter += 1;
         }
@@ -135,7 +136,6 @@ impl App {
                 .y_bounds([0.0, BKG_WIDTH as f64]);
 
             frame.render_widget(canvas, main);
-
         }
 
         let joypad_state = self.gb.cpu.bus.joypad.get_state();
@@ -163,8 +163,15 @@ impl App {
                 Line::from(format!("{:?}", instr_trace[3])),
                 Line::from(format!("{:?}", instr_trace[4])),
                 Line::from(format!("{:?}", size_of::<GbRs>())),
-                Line::from(format!("FPS: {:?}", 1.0 / self.frame_time.as_secs_f64())),
                 Line::from(format!("Emu FPS: {:?}", 1.0 / self.emu_time.as_secs_f64())),
+                Line::from(format!(
+                    "Draw FPS: {:?}",
+                    1.0 / self.draw_time.as_secs_f64()
+                )),
+                Line::from(format!(
+                    "Total FPS: {:?}",
+                    1.0 / (self.draw_time.as_secs_f64() + self.emu_time.as_secs_f64())
+                )),
                 Line::from(format!("Cartridge: {:?}", self.gb.cpu.bus.rom.get_header())),
                 Line::from(format!("LCDC: {:?}", ppu_state.lcdc)),
             ]),
@@ -172,18 +179,10 @@ impl App {
         );
 
         frame.render_widget(OamWidget::new(&self.gb.cpu.bus.ppu), bottom_right);
-
-        /*
-        for oam in oams.get_oams_screen() {
-            let tile = self.gb.cpu.bus.ppu.get_sprite_tile(oam.tile_idx().into());
-            let oam_widget = OamWidget{ oams: *oam, tiles: tile };
-            frame.render_widget(oam_widget, bottom_right);
-        }
-        */
     }
 
     fn handle_events(&mut self) -> io::Result<()> {
-        if !event::poll(std::time::Duration::from_micros(100))? {
+        if !event::poll(std::time::Duration::from_micros(10))? {
             return Ok(());
         }
         match event::read()? {
@@ -375,7 +374,7 @@ fn run_tui(gb: GbRs) -> io::Result<()> {
         exit: false,
         gb,
         halt: true,
-        frame_time: Duration::from_secs(1),
+        draw_time: Duration::from_secs(1),
         emu_time: Duration::from_secs(1),
         tab: 1,
     };
@@ -399,11 +398,10 @@ fn run_tui(gb: GbRs) -> io::Result<()> {
     app_result
 }
 
-
 fn main() -> std::io::Result<()> {
     //let gb = GbRs::new(Rom::acid_cart());
-    let rom_path = std::path::Path::new("roms/tetris.gb");
-    //let rom_path = std::path::Path::new("roms/dmg-acid2.gb");
+    //let rom_path = std::path::Path::new("roms/tetris.gb");
+    let rom_path = std::path::Path::new("testroms/dmg-acid2.gb");
     //let rom_path = std::path::Path::new("roms/tennis.gb");
     let rom = std::fs::read(rom_path).expect("Unable to load test rom: {rom_path}");
     let rom = Rom::from_slice(&rom.as_slice()[0..0x8000]);

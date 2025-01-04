@@ -62,7 +62,7 @@ pub struct PpuState {
     pub ly: u8,
     pub mode: PpuMode,
     pub lyc: u8,
-    pub stat: u8
+    pub stat: u8,
 }
 
 impl PPU {
@@ -209,9 +209,7 @@ impl PPU {
             i += 1;
         }
 
-
         pixels
-
     }
 
     fn render_bg_line(&self, ly: u8) -> [u8; BKG_WIDTH] {
@@ -278,9 +276,8 @@ impl PPU {
     fn get_background_tiles(&self) -> [Tile; TILE_MAP_LEN] {
         let tile_map = self.get_tile_map(self.bkgr_map_start_addr());
 
-        let tiles: [Tile; TILE_MAP_LEN] = core::array::from_fn(|index| {
-            self.bkgr_tile(tile_map[index])
-        });
+        let tiles: [Tile; TILE_MAP_LEN] =
+            core::array::from_fn(|index| self.bkgr_tile(tile_map[index]));
 
         tiles
     }
@@ -288,9 +285,8 @@ impl PPU {
     fn get_window_tiles(&self) -> [Tile; TILE_MAP_LEN] {
         let tile_map = self.get_tile_map(self.window_map_start_addr());
 
-        let tiles: [Tile; TILE_MAP_LEN] = core::array::from_fn(|index| {
-            self.bkgr_tile(tile_map[index])
-        });
+        let tiles: [Tile; TILE_MAP_LEN] =
+            core::array::from_fn(|index| self.bkgr_tile(tile_map[index]));
 
         tiles
     }
@@ -368,7 +364,6 @@ impl PPU {
                     self.screen.buf[ly].copy_from_slice(&bg_line[scx..scx + 160]);
                 }
 
-
                 // Window is enabled
                 if self.lcdc & 0x20 != 0 {
                     if self.ly >= self.wy {
@@ -378,17 +373,18 @@ impl PPU {
 
                         if wx < 8 {
                             let window_offset = 7 - wx;
-                            screen_line.copy_from_slice(&window_line[window_offset..window_offset + 160]);
+                            screen_line
+                                .copy_from_slice(&window_line[window_offset..window_offset + 160]);
                         } else if wx > 166 {
                             // Window not visible
                         } else {
                             let screen_offset = wx - 7;
                             let window_len = 160 - screen_offset;
-                            screen_line[screen_offset..].copy_from_slice(&window_line[..window_len]);
+                            screen_line[screen_offset..]
+                                .copy_from_slice(&window_line[..window_len]);
                         }
                     }
                 }
-
 
                 if self.obj_en() {
                     let oam_map = OamMap::from_mem(&self.oam);
@@ -398,7 +394,8 @@ impl PPU {
                         Tile::from_bytes(&self.vram[vram_index..vram_index + 16])
                     });
 
-                    oam_map.render_line(&mut self.screen.buf[ly], &sprite_tiles, self.ly, false);
+                    let large_sprites = self.large_sprites();
+                    oam_map.render_line(&mut self.screen.buf[ly], &sprite_tiles, self.ly, large_sprites);
                 }
 
                 // TODO: Use actual timing, not just 51
@@ -477,14 +474,13 @@ impl PPU {
     }
 
     fn get_lcdc_state(&self) -> Lcdc {
-
         Lcdc {
             lcd_en: self.lcdc & 0x80 != 0,
             window_tile_map: self.lcdc & 0x40 != 0,
             window_en: self.lcdc & 0x20 != 0,
             bg_wind_tile_data: self.lcdc & 0x10 != 0,
             bg_tile_map: self.lcdc & 0x08 != 0,
-            large_sprite: self.lcdc & 0x04 != 0,
+            large_sprite: self.large_sprites(),
             obj_en: self.lcdc & 0x02 != 0,
             bg_wind_en: self.lcdc & 0x01 != 0,
         }
@@ -501,6 +497,11 @@ impl PPU {
             stat: self.stat,
         }
     }
+
+    fn large_sprites(&self) -> bool {
+        self.lcdc & 0x04 != 0
+    }
+
 }
 
 pub struct Frame {

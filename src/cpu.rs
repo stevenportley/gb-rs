@@ -334,7 +334,7 @@ impl<B: Bus> Cpu<B> {
             _ => unreachable!("rr16mem with invalid bit index! {r16mem}"),
         }
     }
-    
+
     fn push_stack(&mut self, val: u16) {
         self.sp = self.sp - 1;
         self.bus.write(self.sp, (val >> 8) as u8);
@@ -1954,7 +1954,6 @@ impl<B: Bus> Cpu<B> {
     }
 
     pub fn handle_interrupt(&mut self, int_source: IntSource) -> usize {
-
         self.ime = false;
         self.push_stack(self.pc);
 
