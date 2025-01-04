@@ -53,8 +53,8 @@ pub trait Cartridge: Device {
 }
 
 const ROM_LEN: usize = 0x4000;
-const TETRIS: &[u8; 2 * ROM_LEN] = include_bytes!("../roms/tetris.gb");
-const ACID: &[u8; 2 * ROM_LEN] = include_bytes!("../roms/dmg-acid2.gb");
+//const TETRIS: &[u8; 2 * ROM_LEN] = include_bytes!("../roms/tetris.gb");
+const ACID: &[u8; 2 * ROM_LEN] = include_bytes!("../testroms/dmg-acid2.gb");
 
 pub struct Rom {
     rom: [u8; ROM_LEN],
@@ -62,12 +62,14 @@ pub struct Rom {
 }
 
 impl Rom {
+    /*
     pub fn tetris_cart() -> Rom {
         Self {
             rom: TETRIS[..ROM_LEN].try_into().unwrap(),
             mapped_rom: TETRIS[ROM_LEN..].try_into().unwrap(),
         }
     }
+    */
 
     pub fn acid_cart() -> Rom {
         Self {

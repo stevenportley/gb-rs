@@ -5,6 +5,7 @@ use gb_rs::{
     joypad::JoypadInput,
     ppu::{BKG_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH},
     tile::Tile,
+    rom::Rom
 };
 use std::io;
 
@@ -368,7 +369,7 @@ impl Widget for OamWidget<'_> {
     }
 }
 
-pub fn run_tui(gb: GbRs) -> io::Result<()> {
+fn run_tui(gb: GbRs) -> io::Result<()> {
     let mut app = App {
         counter: 0,
         exit: false,
@@ -396,4 +397,25 @@ pub fn run_tui(gb: GbRs) -> io::Result<()> {
     ratatui::restore();
 
     app_result
+}
+
+
+fn main() -> std::io::Result<()> {
+    //let gb = GbRs::new(Rom::acid_cart());
+    //let rom_path = std::path::Path::new("roms/tetris.gb");
+    //let rom_path = std::path::Path::new("roms/dmg-acid2.gb");
+    let rom_path = std::path::Path::new("roms/tennis.gb");
+    let rom = std::fs::read(rom_path).expect("Unable to load test rom: {rom_path}");
+    let rom = Rom::from_slice(&rom.as_slice()[0..0x8000]);
+
+    let gb = GbRs::new(rom);
+
+    run_tui(gb)?;
+    /*
+    use crate::gui::Gui;
+    let gui = Gui::new(gb);
+    gui.run();
+    */
+
+    Ok(())
 }

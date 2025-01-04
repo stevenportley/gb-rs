@@ -13,6 +13,10 @@ ratatui = "0.29.0"
 crossterm = "0.28.1"
 heapless = "0.8.0"
 
+[[bin]]
+name = "tui"
+path = "examples/tui/tui.rs"
+
 #[dependencies.imgui-wgpu]
 #version = "0.24"
 
