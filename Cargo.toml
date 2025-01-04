@@ -3,6 +3,12 @@ name = "gb-rs"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+#This is needed to work around
+#https://bheisler.github.io/criterion.rs/book/faq.html#cargo-bench-gives-unrecognized-option-errors-for-valid-command-line-options
+bench = false
+
+
 [dependencies]
 heapless = "0.8.0"
 
