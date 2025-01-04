@@ -4,25 +4,27 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-#pixels = "0.14"
-#winit = "0.27"
-#imgui = "0.11"
-#imgui-winit-support = "0.11"
-#winit_input_helper = "0.13"
-ratatui = "0.29.0"
-crossterm = "0.28.1"
 heapless = "0.8.0"
 
-[[bin]]
+[[example]]
 name = "tui"
 path = "examples/tui/tui.rs"
 
-#[dependencies.imgui-wgpu]
-#version = "0.24"
-
 [dev-dependencies]
 criterion = "0.3"
+ratatui = "0.29.0"
+crossterm = "0.28.1"
+pixels = "0.14"
+winit = "0.27"
+imgui = "0.11"
+imgui-winit-support = "0.11"
+winit_input_helper = "0.13"
+
+[dev-dependencies.imgui-wgpu]
+version = "0.24"
 
 [[bench]]
 name = "my_benchmark"
 harness = false
+
+
