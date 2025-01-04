@@ -386,7 +386,6 @@ fn run_tui(gb: GbRs) -> io::Result<()> {
     )
     .expect("Failure to enable key up events");
 
-    //terminal.resize(ratatui::layout::Rect { x: 0, y: 0, width: 600, height: 600}).expect("Unable to resize :(");
     terminal.clear()?;
     let app_result = app.run(&mut terminal);
 
@@ -401,8 +400,8 @@ fn run_tui(gb: GbRs) -> io::Result<()> {
 fn main() -> std::io::Result<()> {
     //let gb = GbRs::new(Rom::acid_cart());
     //let rom_path = std::path::Path::new("roms/tetris.gb");
-    let rom_path = std::path::Path::new("testroms/dmg-acid2.gb");
-    //let rom_path = std::path::Path::new("roms/tennis.gb");
+    //let rom_path = std::path::Path::new("testroms/dmg-acid2.gb");
+    let rom_path = std::path::Path::new("roms/tennis.gb");
     let rom = std::fs::read(rom_path).expect("Unable to load test rom: {rom_path}");
     let rom = Rom::from_slice(&rom.as_slice()[0..0x8000]);
 

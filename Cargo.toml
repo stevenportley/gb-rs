@@ -16,6 +16,10 @@ heapless = "0.8.0"
 name = "tui"
 path = "examples/tui/tui.rs"
 
+[[example]]
+name = "gui"
+path = "examples/gui/gui.rs"
+
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
 ratatui = "0.29.0"

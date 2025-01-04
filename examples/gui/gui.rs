@@ -1,5 +1,5 @@
-use gb_rs::gb::GbRs;
-use pixels::{wgpu, PixelsContext};
+use gb_rs::{gb::GbRs, rom::Rom};
+use pixels::wgpu;
 use std::time::Instant;
 
 use pixels::{Pixels, SurfaceTexture};
@@ -11,12 +11,9 @@ use winit::window::Window;
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
 
-const HORIZ_TILES: usize = 32;
-const VERT_TILES: usize = 32;
-
-const WIDTH: u32 = (HORIZ_TILES * 8) as u32;
+const WIDTH: u32 = 160;
 const SCALING: f64 = 4.0;
-const HEIGHT: u32 = (VERT_TILES * 8) as u32;
+const HEIGHT: u32 = 144;
 
 /// Manages all state required for rendering Dear ImGui over `Pixels`.
 pub(crate) struct Gui {
@@ -146,9 +143,9 @@ impl Gui {
             // Draw the current frame
             if let Event::RedrawRequested(_) = event {
             
-                let frame = self.gb.cpu.bus.ppu.get_frame();
-                self.pixels.frame_mut()[..(8 * 32) * (4 * 8 * 32)].copy_from_slice(&frame);
-
+                let frame = self.gb.cpu.bus.ppu.get_screen();
+                self.pixels.frame_mut()[..frame.len()].copy_from_slice(&frame);
+                
                 // Prepare Dear ImGui
                 let now = Instant::now();
                 self.imgui.io_mut().update_delta_time(now - self.last_frame);
@@ -240,4 +237,17 @@ impl Gui {
             }
         });
     }
+}
+
+
+fn main() -> std::io::Result<()> {
+
+    let rom_path = std::path::Path::new("roms/tetris.gb");
+    let rom = std::fs::read(rom_path).expect("Unable to load test rom: {rom_path}");
+    let rom = Rom::from_slice(&rom.as_slice()[0..0x8000]);
+    let gb = GbRs::new(rom);
+    let gui = Gui::new(gb);
+    gui.run();
+
+    Ok(())
 }
