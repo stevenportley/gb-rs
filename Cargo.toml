@@ -11,7 +11,7 @@ name = "tui"
 path = "examples/tui/tui.rs"
 
 [dev-dependencies]
-criterion = "0.3"
+criterion = { version = "0.5", features = ["html_reports"] }
 ratatui = "0.29.0"
 crossterm = "0.28.1"
 pixels = "0.14"
@@ -26,5 +26,9 @@ version = "0.24"
 [[bench]]
 name = "my_benchmark"
 harness = false
+
+[profile.bench]
+lto = true
+
 
 
