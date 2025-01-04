@@ -37,4 +37,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Run benchmark
-        run: cargo bench -- --output-format bencher | tee output.txt
+        run: cargo bench
