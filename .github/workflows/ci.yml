@@ -1,8 +1,6 @@
-name: Rust
+name: CI
 
 on:
-  push:
-    branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
 
@@ -10,10 +8,11 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-
-    runs-on: ubuntu-latest
-
+  ci_matrix:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, mac-latest]
+    runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v4
     - name: Setup
@@ -22,21 +21,8 @@ jobs:
       run: cargo build --verbose
     - name: Build TUI
       run: cargo build --example tui
-
-  test:
-
-    runs-on: ubuntu-latest
-
-    steps:
+    - name: Build GUI
+      run: cargo build --example gui
     - uses: actions/checkout@v4
     - name: Run tests
       run: cargo test --verbose
-
-  bench:
-
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-      - name: Run benchmark
-        run: cargo bench
