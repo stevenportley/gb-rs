@@ -11,8 +11,8 @@ pub enum GbcMode {
 
 #[derive(Debug)]
 pub struct CartridgeHeader {
-    pub title: String<16>,
-    pub manufacturer_code: String<16>,
+    pub title: String<20>,
+    pub manufacturer_code: String<20>,
     //pub gbc_flag: GbcMode,
     pub licensee_code: String<16>,
     pub is_sgb: bool,
@@ -26,12 +26,21 @@ pub struct CartridgeHeader {
 
 pub trait Cartridge: Device {
     fn get_header(&self) -> CartridgeHeader {
-        let title_iter = (0x134..=0x143)
+
+        let title = (0x134..=0x143)
             .into_iter()
-            .map(|addr| self.read(addr) as char);
-        let manufacturer_iter = (0x13F..=0x143)
+            .map(|addr| self.read(addr))
+            .take_while(|b| *b != 0 )
+            .collect();
+        let title = String::from_utf8(title).expect("The title is invalid UTF-8");
+
+
+        let manufacturer_code = (0x13F..=0x143)
             .into_iter()
-            .map(|addr| self.read(addr) as char);
+            .map(|addr| self.read(addr))
+            .take_while(|b| *b != 0 )
+            .collect();
+        let manufacturer_code = String::from_utf8(manufacturer_code).expect("The manufacturer is invalid UTF-8");
 
         /* TODO
         let gbc_flag = match self.read(0x143) {
@@ -42,8 +51,8 @@ pub trait Cartridge: Device {
         */
 
         CartridgeHeader {
-            title: String::from_iter(title_iter),
-            manufacturer_code: String::from_iter(manufacturer_iter),
+            title,
+            manufacturer_code,
             //gbc_flag,
             licensee_code: String::new(),
             is_sgb: self.read(0x146) != 0x03,
