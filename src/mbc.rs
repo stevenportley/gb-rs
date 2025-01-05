@@ -225,7 +225,10 @@ impl<const ROM_SIZE: usize, R: Ram> Device for MBC1<ROM_SIZE, R> {
             0x4000..=0x7FFF => {
                 let addr = (addr as usize - 0x4000)
                     | (self.rom_bank_num as usize) << 14;
-                    //| (self.ram_bank_num as usize) << 19;
+
+                //TODO On smaller cartridges, the upper bits 
+                //     here are ignored, but not always
+                    //| (self.ram_bank_num as usize) << 19I;
                 self.rom[addr]
             }
 
