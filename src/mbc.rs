@@ -1,6 +1,4 @@
 
-use core::str::FromStr;
-
 use crate::bus::Device;
 use heapless::String;
 use heapless::Vec;
@@ -48,9 +46,22 @@ pub enum MBC<const ROM_SIZE: usize> {
 }
 
 fn get_header(rom: &[u8]) -> CartridgeHeader {
-    let title_iter = (0x134..=0x143).into_iter().map(|addr| rom[addr] as char);
 
-    let manufacturer_iter = (0x13F..=0x143).into_iter().map(|addr| rom[addr] as char);
+    let title = (0x134..=0x143)
+            .into_iter()
+            .map(|addr| rom[addr])
+            .take_while(|b| *b != 0 )
+            .collect();
+    let title = String::from_utf8(title).expect("The title is invalid UTF-8");
+
+
+    let manufacturer_code = (0x13F..=0x143)
+            .into_iter()
+            .map(|addr| rom[addr])
+            .take_while(|b| *b != 0 )
+            .collect();
+    let manufacturer_code = String::from_utf8(manufacturer_code).expect("The manufacturer is invalid UTF-8");
+
 
     let rom_size = 32768 * (1 << rom[0x148]);
     let ram_size = match rom[0x149] {
@@ -64,8 +75,8 @@ fn get_header(rom: &[u8]) -> CartridgeHeader {
     };
 
     CartridgeHeader {
-        title: String::from_iter(title_iter),
-        manufacturer_code: String::from_iter(manufacturer_iter),
+        title,
+        manufacturer_code,
         //gbc_flag,
         licensee_code: String::new(),
         is_sgb: rom[0x146] != 0x03,

@@ -80,30 +80,6 @@ impl<const MAX_ROM: usize, T: RamController> Device for Cartridge<MAX_ROM, T> {
     }
 }
 
-impl<const MAX_ROM: usize, T: RamController> Cartridge<MAX_ROM, T> {
-    pub fn get_header(&self) -> CartridgeHeader {
-        let title_iter = (0x134..=0x143)
-            .into_iter()
-            .map(|addr| self.read(addr) as char);
-
-        let manufacturer_iter = (0x13F..=0x143)
-            .into_iter()
-            .map(|addr| self.read(addr))
-            .take_while(|b| *b != 0 )
-            .collect();
-        let manufacturer_code = String::from_utf8(manufacturer_code).expect("The manufacturer is invalid UTF-8");
-
-        CartridgeHeader {
-            title,
-            manufacturer_code,
-            //gbc_flag,
-            licensee_code: String::new(),
-            is_sgb: self.read(0x146) != 0x03,
-            cart_type: self.read(0x147),
-        }
-    }
-}
-
 const ROM_LEN: usize = 0x4000;
 //const TETRIS: &[u8; 2 * ROM_LEN] = include_bytes!("../roms/tetris.gb");
 const ACID: &[u8; 2 * ROM_LEN] = include_bytes!("../tests/roms/dmg-acid2.gb");

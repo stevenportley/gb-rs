@@ -400,7 +400,7 @@ fn main() -> std::io::Result<()> {
     //let rom_path = std::path::Path::new("roms/tetris.gb");
     //let rom_path = std::path::Path::new("testroms/dmg-acid2.gb");
     //let rom_path = std::path::Path::new("roms/tennis.gb");
-    //let rom_path = std::path::Path::new("roms/super_mario_land.gb");
+    let rom_path = std::path::Path::new("roms/super_mario_land.gb");
     let rom_path = std::path::Path::new("tests/roms/blargg/testrom-cpuinstr-01.gb");
     let rom = std::fs::read(rom_path).expect("Unable to load test rom: {rom_path}");
     //let rom = SimpleCart::from_slice(&rom);
