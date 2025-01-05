@@ -30,7 +30,7 @@ pub struct Bus {
     hram: [u8; 0x7F],
     passed_buf: Deque<u8, 6>,
     stats: BusStats,
-    pub rom: MBC<0x10000>,
+    pub rom: MBC<0x8000>,
 }
 
 impl Device for Bus {

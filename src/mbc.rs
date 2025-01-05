@@ -1,4 +1,6 @@
 
+use core::str::FromStr;
+
 use crate::bus::Device;
 use heapless::String;
 use heapless::Vec;
@@ -20,7 +22,7 @@ pub struct CartridgeHeader {
 
 #[derive(Default)]
 pub struct SimpleRam {
-    pub ram: Rom<0x80000>,
+    pub ram: Rom<8192>,
 }
 
 impl Ram for SimpleRam {
@@ -62,7 +64,7 @@ fn get_header(rom: &[u8]) -> CartridgeHeader {
     };
 
     CartridgeHeader {
-        title: String::from_iter(title_iter),
+        title: String::from_str("title").unwrap(),//String::from_iter(title_iter),
         manufacturer_code: String::from_iter(manufacturer_iter),
         //gbc_flag,
         licensee_code: String::new(),
@@ -96,7 +98,7 @@ impl<const ROM_SIZE: usize> MBC<ROM_SIZE> {
 
         match header.cart_type {
             0 => { 
-                MBC::NoMBC { rom: Rom::from_slice(rom).unwrap() }
+                MBC::NoMBC { rom: Rom::from_slice(rom).expect("Failed to build No MBC") }
             },
             1 | 2 | 3 => {
                 let mut a = MBC::MBC1 { mbc: MBC1::new(rom, 
