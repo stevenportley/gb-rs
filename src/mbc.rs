@@ -7,7 +7,7 @@ use heapless::Vec;
 
 #[derive(Debug)]
 pub struct CartridgeHeader {
-    pub title: String<16>,
+    pub title: String<25>,
     pub manufacturer_code: String<16>,
     //pub gbc_flag: GbcMode,
     pub licensee_code: String<16>,
@@ -64,7 +64,7 @@ fn get_header(rom: &[u8]) -> CartridgeHeader {
     };
 
     CartridgeHeader {
-        title: String::from_str("title").unwrap(),//String::from_iter(title_iter),
+        title: String::from_iter(title_iter),
         manufacturer_code: String::from_iter(manufacturer_iter),
         //gbc_flag,
         licensee_code: String::new(),
