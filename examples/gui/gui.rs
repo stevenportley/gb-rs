@@ -61,7 +61,6 @@ impl Gui {
             imgui_winit_support::HiDpiMode::Default,
         );
 
-
         let pixels = {
             let window_size = window.inner_size();
             let surface_texture =
@@ -142,10 +141,9 @@ impl Gui {
         self.event_loop.run(move |event, _, control_flow| {
             // Draw the current frame
             if let Event::RedrawRequested(_) = event {
-            
                 let frame = self.gb.cpu.bus.ppu.get_screen();
                 self.pixels.frame_mut()[..frame.len()].copy_from_slice(&frame);
-                
+
                 // Prepare Dear ImGui
                 let now = Instant::now();
                 self.imgui.io_mut().update_delta_time(now - self.last_frame);
@@ -164,11 +162,7 @@ impl Gui {
                         self.last_cursor = mouse_cursor;
                         self.platform.prepare_render(ui, &self.window);
                     }
-                    Self::render(
-                        ui,
-                        &mut self.about_open,
-                        &mut self.metrics_window,
-                    )?;
+                    Self::render(ui, &mut self.about_open, &mut self.metrics_window)?;
 
                     // Render Dear ImGui with WGPU
                     let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -239,9 +233,7 @@ impl Gui {
     }
 }
 
-
 fn main() -> std::io::Result<()> {
-
     let rom_path = std::path::Path::new("roms/tetris.gb");
     let rom = std::fs::read(rom_path).expect("Unable to load test rom: {rom_path}");
     let rom = Rom::from_slice(&rom.as_slice()[0..0x8000]);

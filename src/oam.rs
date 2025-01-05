@@ -45,7 +45,6 @@ impl<'a> OamEntry<'a> {
     }
 
     pub fn get_pixels(&self, tiles: &[Tile], mut line_idx: u8, large_tiles: bool) -> [u8; 8] {
-
         let flags = self.oam_flags();
         let mut tile_idx = self.tile_idx();
 
