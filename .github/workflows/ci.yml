@@ -26,10 +26,21 @@ jobs:
         os: [ubuntu-latest, mac-latest]
         include:
           - os: ubuntu-latest
-            INSTALL_DEPS: sudo apt-get install -yq libfontconfig1-dev
+            INSTALL_DEPS: 
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v4
+    - name:  Install
+      run:   |
+         if [ "$RUNNER_OS" == "Linux" ]; then
+              sudo apt-get install -yq libfontconfig1-dev
+         elif [ "$RUNNER_OS" == "macOS" ]; then
+              # Do nothing
+         else
+              echo "$RUNNER_OS not supported"
+              exit 1
+         fi
+      shell: bash
     - name: Build
       run: cargo build --verbose
     - name: Build TUI
