@@ -10,9 +10,11 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     let rom = Rom::from_slice(rom.as_slice());
     let mut gb = GbRs::new(rom);
 
-    c.bench_function("dmg-acid2_frames", |b| b.iter(||  {
+    c.bench_function("dmg-acid2_frames", |b| {
+        b.iter(|| {
             gb.run_frame();
-    }));
+        })
+    });
 }
 
 criterion_group!(benches, criterion_benchmark);

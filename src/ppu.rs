@@ -395,7 +395,12 @@ impl PPU {
                     });
 
                     let large_sprites = self.large_sprites();
-                    oam_map.render_line(&mut self.screen.buf[ly], &sprite_tiles, self.ly, large_sprites);
+                    oam_map.render_line(
+                        &mut self.screen.buf[ly],
+                        &sprite_tiles,
+                        self.ly,
+                        large_sprites,
+                    );
                 }
 
                 // TODO: Use actual timing, not just 51
@@ -501,7 +506,6 @@ impl PPU {
     fn large_sprites(&self) -> bool {
         self.lcdc & 0x04 != 0
     }
-
 }
 
 pub struct Frame {

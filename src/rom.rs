@@ -54,7 +54,7 @@ pub trait Cartridge: Device {
 
 const ROM_LEN: usize = 0x4000;
 //const TETRIS: &[u8; 2 * ROM_LEN] = include_bytes!("../roms/tetris.gb");
-const ACID: &[u8; 2 * ROM_LEN] = include_bytes!("../testroms/dmg-acid2.gb");
+const ACID: &[u8; 2 * ROM_LEN] = include_bytes!("../tests/roms/dmg-acid2.gb");
 
 pub struct Rom {
     rom: [u8; ROM_LEN],
