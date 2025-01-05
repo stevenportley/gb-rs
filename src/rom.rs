@@ -1,5 +1,6 @@
 use crate::bus::Device;
 use heapless::String;
+use heapless::Vec;
 
 /* TODO
 pub enum GbcMode {
@@ -24,31 +25,73 @@ pub struct CartridgeHeader {
     */
 }
 
-pub trait Cartridge: Device {
-    fn get_header(&self) -> CartridgeHeader {
+pub trait RamController: Device {}
 
-        let title = (0x134..=0x143)
+pub struct NoRam {}
+
+impl Device for NoRam {
+    fn write(&mut self, _addr: u16, _val: u8) {
+        //No Op
+    }
+
+    fn read(&self, _addr: u16) -> u8 {
+        0xFF
+        //No Op
+    }
+}
+
+impl RamController for NoRam {}
+
+pub struct Cartridge<const MAX_ROM: usize, T: RamController> {
+    rom: Vec<u8, MAX_ROM>,
+    ram: T,
+}
+
+pub type SimpleCart = Cartridge<0x8000, NoRam>; // 32K
+pub type FullRom = Cartridge<0x800000, NoRam>; // 8MiB
+
+impl SimpleCart {
+    pub fn acid_cart() -> Self {
+        const ACID: &[u8; 0x8000] = include_bytes!("../tests/roms/dmg-acid2.gb");
+        Self {
+            rom: Vec::from_slice(ACID).expect("DMG-Acid2 failure to load"),
+            ram: NoRam {},
+        }
+    }
+
+    pub fn from_slice(data: &[u8]) -> Self {
+        let cart = Self {
+            rom: Vec::from_slice(data).expect("Failed to load cart from slice"),
+            ram: NoRam {},
+        };
+
+        cart
+    }
+}
+
+impl<const MAX_ROM: usize, T: RamController> Device for Cartridge<MAX_ROM, T> {
+    fn write(&mut self, _addr: u16, _val: u8) {
+        //No Op
+    }
+
+    fn read(&self, addr: u16) -> u8 {
+        let addr = addr as usize;
+        self.rom[addr]
+    }
+}
+
+impl<const MAX_ROM: usize, T: RamController> Cartridge<MAX_ROM, T> {
+    pub fn get_header(&self) -> CartridgeHeader {
+        let title_iter = (0x134..=0x143)
             .into_iter()
-            .map(|addr| self.read(addr))
-            .take_while(|b| *b != 0 )
-            .collect();
-        let title = String::from_utf8(title).expect("The title is invalid UTF-8");
+            .map(|addr| self.read(addr) as char);
 
-
-        let manufacturer_code = (0x13F..=0x143)
+        let manufacturer_iter = (0x13F..=0x143)
             .into_iter()
             .map(|addr| self.read(addr))
             .take_while(|b| *b != 0 )
             .collect();
         let manufacturer_code = String::from_utf8(manufacturer_code).expect("The manufacturer is invalid UTF-8");
-
-        /* TODO
-        let gbc_flag = match self.read(0x143) {
-            0x80 => GbcMode::GbGbc,
-            0xC0 => GbcMode::OnlyGbc,
-            _ => GbcMode::Gb,
-        };
-        */
 
         CartridgeHeader {
             title,
@@ -98,8 +141,6 @@ impl Rom {
         rom
     }
 }
-
-impl Cartridge for Rom {}
 
 impl Device for Rom {
     fn write(&mut self, _addr: u16, _val: u8) {

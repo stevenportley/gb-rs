@@ -1,18 +1,18 @@
-use crate::bus::StaticBus;
+use crate::bus::Bus;
 use crate::cpu::Cpu;
 use crate::ppu::SCREEN_HEIGHT;
-use crate::rom::Rom;
+use crate::rom::SimpleCart;
 
 const CYCLES_PER_FRAME: i32 = 17556;
 
 pub struct GbRs {
-    pub cpu: Cpu<StaticBus>,
+    pub cpu: Cpu,
 }
 
 impl GbRs {
-    pub fn new(rom: Rom) -> Self {
+    pub fn new(rom: &[u8]) -> Self {
         Self {
-            cpu: Cpu::new(StaticBus::new(rom)),
+            cpu: Cpu::new(Bus::new(rom)),
         }
     }
 
