@@ -47,6 +47,5 @@ jobs:
       run: cargo build --example tui
     - name: Build GUI
       run: cargo build --example gui
-    - uses: actions/checkout@v4
     - name: Run tests
       run: cargo test --verbose
