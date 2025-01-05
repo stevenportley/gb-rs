@@ -23,7 +23,7 @@ jobs:
   ci_matrix:
     strategy:
       matrix:
-        os: [ubuntu-latest, mac-latest]
+        os: [ubuntu-latest, macos-latest]
         include:
           - os: ubuntu-latest
             INSTALL_DEPS: 
