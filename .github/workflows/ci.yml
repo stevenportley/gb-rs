@@ -35,7 +35,7 @@ jobs:
          if [ "$RUNNER_OS" == "Linux" ]; then
               sudo apt-get install -yq libfontconfig1-dev
          elif [ "$RUNNER_OS" == "macOS" ]; then
-              # Do nothing
+              ; # Do nothing
          else
               echo "$RUNNER_OS not supported"
               exit 1
