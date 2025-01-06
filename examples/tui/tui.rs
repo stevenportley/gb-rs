@@ -1,9 +1,7 @@
 use gb_rs::{
-    gb::GbRs,
-    joypad::JoypadDirection,
-    joypad::JoypadInput,
+    gb::{GbRs, LargeInMemoryCartridge},
+    joypad::{JoypadDirection, JoypadInput},
     ppu::{BKG_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH},
-    rom::SimpleCart,
     tile::Tile,
 };
 use std::io;
@@ -34,7 +32,7 @@ pub struct App {
     counter: u32,
     halt: bool,
     exit: bool,
-    gb: GbRs,
+    gb: GbRs<LargeInMemoryCartridge>,
     draw_time: Duration,
     emu_time: Duration,
     tab: u8,
@@ -161,7 +159,7 @@ impl App {
                 Line::from(format!("{:?}", instr_trace[2])),
                 Line::from(format!("{:?}", instr_trace[3])),
                 Line::from(format!("{:?}", instr_trace[4])),
-                Line::from(format!("{:?}", size_of::<GbRs>())),
+                Line::from(format!("{:?}", size_of_val(&self.gb))),
                 Line::from(format!("Emu FPS: {:?}", 1.0 / self.emu_time.as_secs_f64())),
                 Line::from(format!(
                     "Draw FPS: {:?}",
@@ -171,7 +169,7 @@ impl App {
                     "Total FPS: {:?}",
                     1.0 / (self.draw_time.as_secs_f64() + self.emu_time.as_secs_f64())
                 )),
-                Line::from(format!("Cartridge: {:?}", self.gb.cpu.bus.rom.get_header())),
+                Line::from(format!("Cartridge: {:?}", self.gb.cpu.bus.mbc.get_header())),
                 Line::from(format!("LCDC: {:?}", ppu_state.lcdc)),
             ]),
             top_right,
@@ -367,7 +365,7 @@ impl Widget for OamWidget<'_> {
     }
 }
 
-fn run_tui(gb: GbRs) -> io::Result<()> {
+fn run_tui(gb: GbRs<LargeInMemoryCartridge>) -> io::Result<()> {
     let mut app = App {
         counter: 0,
         exit: false,
@@ -401,11 +399,13 @@ fn main() -> std::io::Result<()> {
     //let rom_path = std::path::Path::new("testroms/dmg-acid2.gb");
     //let rom_path = std::path::Path::new("roms/tennis.gb");
     let rom_path = std::path::Path::new("roms/super_mario_land.gb");
-    let rom_path = std::path::Path::new("tests/roms/blargg/testrom-cpuinstr-01.gb");
+    //let rom_path = std::path::Path::new("tests/roms/blargg/testrom-cpuinstr-01.gb");
     let rom = std::fs::read(rom_path).expect("Unable to load test rom: {rom_path}");
+
+    let rom: LargeInMemoryCartridge = LargeInMemoryCartridge::from_slice(&rom);
     //let rom = SimpleCart::from_slice(&rom);
 
-    let gb = GbRs::new(&rom);
+    let gb = GbRs::new(rom);
 
     run_tui(gb)?;
     /*

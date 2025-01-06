@@ -1,6 +1,6 @@
 use crate::bus::Device;
+use core::ops::DerefMut;
 use heapless::String;
-use heapless::Vec;
 
 #[derive(Debug)]
 pub struct CartridgeHeader {
@@ -17,33 +17,24 @@ pub struct CartridgeHeader {
     */
 }
 
-#[derive(Default)]
-pub struct SimpleRam {
-    pub ram: Rom<8192>,
+pub trait MemoryRegion: DerefMut<Target = [u8]> {}
+
+pub trait Cartridge {
+    type Rom: DerefMut<Target = [u8]> + ?Sized;
+    type Ram: DerefMut<Target = [u8]> + ?Sized;
+
+    fn rom(&self) -> &Self::Rom;
+    fn rom_mut(&mut self) -> &mut Self::Rom;
+    fn ram(&self) -> &Self::Ram;
+    fn ram_mut(&mut self) -> &mut Self::Ram;
 }
 
-impl Ram for SimpleRam {
-    fn write(&mut self, addr: u32, val: u8) {
-        self.ram[addr as usize] = val;
-    }
-    fn read(&self, addr: u32) -> u8 {
-        self.ram[addr as usize]
-    }
+pub enum MemoryBankController<Cart: Cartridge> {
+    MBC0(Cart),
+    MBC1(MBC1<Cart>),
 }
 
-pub trait Ram {
-    fn write(&mut self, addr: u32, val: u8);
-    fn read(&self, addr: u32) -> u8;
-}
-
-type Rom<const SIZE: usize> = Vec<u8, SIZE>;
-
-pub enum MBC<const ROM_SIZE: usize> {
-    NoMBC { rom: Rom<ROM_SIZE> },
-    MBC1 { mbc: MBC1<ROM_SIZE, SimpleRam> },
-}
-
-fn get_header(rom: &[u8]) -> CartridgeHeader {
+pub fn get_cart_header(rom: &[u8]) -> CartridgeHeader {
     let title = (0x134..=0x143)
         .into_iter()
         .map(|addr| rom[addr])
@@ -82,87 +73,65 @@ fn get_header(rom: &[u8]) -> CartridgeHeader {
     }
 }
 
-impl<const ROM_SIZE: usize> Device for MBC<ROM_SIZE> {
+impl<Cart: Cartridge> Device for MemoryBankController<Cart> {
     fn write(&mut self, addr: u16, val: u8) {
         match self {
-            MBC::NoMBC { .. } => { /* NOP */ }
-            MBC::MBC1 { mbc } => mbc.write(addr, val),
+            MemoryBankController::MBC0(_cart) => { /* NOP */ }
+            MemoryBankController::MBC1(mbc) => mbc.write(addr, val),
         }
     }
 
     fn read(&self, addr: u16) -> u8 {
         match self {
-            MBC::NoMBC { rom } => rom[addr as usize],
-            MBC::MBC1 { mbc } => mbc.read(addr),
+            MemoryBankController::MBC0(cart) => cart.rom()[addr as usize],
+            MemoryBankController::MBC1(mbc) => mbc.read(addr),
         }
     }
 }
 
-impl<const ROM_SIZE: usize> MBC<ROM_SIZE> {
-    pub fn new(rom: &[u8]) -> Self {
-        let header = get_header(rom);
+impl<Cart: Cartridge> MemoryBankController<Cart> {
+    pub fn new(cart: Cart) -> Self {
+        let header = get_cart_header(&cart.rom());
 
         match header.cart_type {
-            0 => MBC::NoMBC {
-                rom: Rom::from_slice(rom).expect("Failed to build No MBC"),
-            },
-            1 | 2 | 3 => {
-                let mut a = MBC::MBC1 {
-                    mbc: MBC1::new(rom, SimpleRam { ram: Rom::new() }),
-                };
-
-                loop {
-                    if let MBC::MBC1 { mbc } = &mut a {
-                        if mbc.ram.ram.is_full() {
-                            break;
-                        }
-                        let _ = mbc.ram.ram.push(0);
-                    }
-                }
-
-                a
-            }
-            _ => {
-                unimplemented!(
-                    "MBC type not implemented! Cart type: {:?}",
-                    header.cart_type
-                )
-            }
+            0 => MemoryBankController::MBC0(cart),
+            1 | 2 | 3 => MemoryBankController::MBC1(MBC1::new(cart)),
+            _ => unimplemented!(
+                "MBC type not implemented! Cart type: {:?}",
+                header.cart_type
+            ),
         }
     }
 
     pub fn get_header(&self) -> CartridgeHeader {
         match self {
-            MBC::NoMBC { rom } => get_header(rom),
-            MBC::MBC1 { mbc } => get_header(mbc.rom.as_slice()),
+            MemoryBankController::MBC0(cart) => get_cart_header(&cart.rom()),
+            MemoryBankController::MBC1(mbc) => get_cart_header(&mbc.cart.rom()),
         }
     }
 }
 
-struct MBC1<const ROM_SIZE: usize, R: Ram> {
+struct MBC1<Cart: Cartridge> {
+    cart: Cart,
     ram_en: bool,
     rom_bank_num: u8,
     adv_bank_mode: bool,
     ram_bank_num: u8,
-    rom: Rom<ROM_SIZE>,
-    ram: R,
 }
 
-impl<const ROM_SIZE: usize, R: Ram> MBC1<ROM_SIZE, R> {
-    fn new(rom: &[u8], ram: R) -> Self {
-        assert!(rom.len() <= ROM_SIZE);
+impl<Cart: Cartridge> MBC1<Cart> {
+    fn new(cart: Cart) -> Self {
         Self {
+            cart,
             ram_en: false,
             rom_bank_num: 1,
             adv_bank_mode: false,
             ram_bank_num: 1,
-            rom: Rom::from_slice(rom).expect("Failed to build ROM"),
-            ram,
         }
     }
 }
 
-impl<const ROM_SIZE: usize, R: Ram> Device for MBC1<ROM_SIZE, R> {
+impl<Cart: Cartridge> Device for MBC1<Cart> {
     fn write(&mut self, addr: u16, val: u8) {
         match addr {
             /* Registers */
@@ -203,7 +172,8 @@ impl<const ROM_SIZE: usize, R: Ram> Device for MBC1<ROM_SIZE, R> {
                         0
                     };
 
-                self.ram.write(offset, val);
+                //TODO: Size check
+                self.cart.ram_mut()[offset as usize] = val;
             }
             _ => {
                 unreachable!("Invalid MBC1 address! addr: {:?}, val: {:?}", addr, val);
@@ -218,7 +188,7 @@ impl<const ROM_SIZE: usize, R: Ram> Device for MBC1<ROM_SIZE, R> {
                 if self.adv_bank_mode {
                     unimplemented!("Not implementing advanced banking mode!")
                 } else {
-                    self.rom[addr as usize]
+                    self.cart.rom()[addr as usize]
                 }
             }
 
@@ -229,7 +199,7 @@ impl<const ROM_SIZE: usize, R: Ram> Device for MBC1<ROM_SIZE, R> {
                 //TODO On smaller cartridges, the upper bits
                 //     here are ignored, but not always
                 //| (self.ram_bank_num as usize) << 19I;
-                self.rom[addr]
+                self.cart.rom()[addr]
             }
 
             /* RAM Bank X */
@@ -243,7 +213,7 @@ impl<const ROM_SIZE: usize, R: Ram> Device for MBC1<ROM_SIZE, R> {
                         } else {
                             0
                         };
-                    self.ram.read(offset)
+                    self.cart.ram()[offset as usize]
                 }
             }
 
@@ -253,3 +223,76 @@ impl<const ROM_SIZE: usize, R: Ram> Device for MBC1<ROM_SIZE, R> {
         }
     }
 }
+
+/*
+ * Preserving this incase we every want to do built-in rom things
+ *
+
+impl SimpleCart {
+    pub fn acid_cart() -> Self {
+        const ACID: &[u8; 0x8000] = include_bytes!("../tests/roms/dmg-acid2.gb");
+        Self {
+            rom: Vec::from_slice(ACID).expect("DMG-Acid2 failure to load"),
+            ram: NoRam {},
+        }
+    }
+
+    pub fn from_slice(data: &[u8]) -> Self {
+        let cart = Self {
+            rom: Vec::from_slice(data).expect("Failed to load cart from slice"),
+            ram: NoRam {},
+        };
+
+        cart
+    }
+}
+
+impl<const MAX_ROM: usize, T: RamController> Device for Cartridge<MAX_ROM, T> {
+    fn write(&mut self, _addr: u16, _val: u8) {
+        //No Op
+    }
+
+    fn read(&self, addr: u16) -> u8 {
+        let addr = addr as usize;
+        self.rom[addr]
+    }
+}
+
+const ROM_LEN: usize = 0x4000;
+//const TETRIS: &[u8; 2 * ROM_LEN] = include_bytes!("../roms/tetris.gb");
+const ACID: &[u8; 2 * ROM_LEN] = include_bytes!("../tests/roms/dmg-acid2.gb");
+
+pub struct Rom {
+    rom: [u8; ROM_LEN],
+    mapped_rom: [u8; ROM_LEN],
+}
+
+impl Rom {
+    /*
+    pub fn tetris_cart() -> Rom {
+        Self {
+            rom: TETRIS[..ROM_LEN].try_into().unwrap(),
+            mapped_rom: TETRIS[ROM_LEN..].try_into().unwrap(),
+        }
+    }
+    */
+
+    pub fn acid_cart() -> Rom {
+        Self {
+            rom: ACID[..ROM_LEN].try_into().unwrap(),
+            mapped_rom: ACID[ROM_LEN..].try_into().unwrap(),
+        }
+    }
+
+    pub fn from_slice(data: &[u8]) -> Rom {
+        let mut rom = Rom {
+            rom: [0; ROM_LEN],
+            mapped_rom: [0; ROM_LEN],
+        };
+
+        rom.rom.copy_from_slice(&data[..ROM_LEN]);
+        rom.mapped_rom.copy_from_slice(&data[ROM_LEN..]);
+        rom
+    }
+}
+*/

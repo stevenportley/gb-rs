@@ -1,6 +1,7 @@
 use crate::{
     bus::{Bus, Device},
     interrupts::IntSource,
+    mbc::Cartridge,
 };
 
 fn does_bit3_overflow(a: u8, b: u8) -> bool {
@@ -9,7 +10,6 @@ fn does_bit3_overflow(a: u8, b: u8) -> bool {
 
     return (0xF - a) < b;
 }
-
 fn does_bit11_overflow(a: u16, b: u16) -> bool {
     let a = a & 0xFFF;
     let b = b & 0xFFF;
@@ -23,7 +23,7 @@ fn does_bit3_borrow(a: u8, b: u8) -> bool {
     return b > a;
 }
 
-pub struct Cpu {
+pub struct Cpu<Cart: Cartridge> {
     a: u8,
     b: u8,
     c: u8,
@@ -42,7 +42,7 @@ pub struct Cpu {
     ime: bool,
 
     pub sleep: bool,
-    pub bus: Bus,
+    pub bus: Bus<Cart>,
 }
 
 #[derive(Debug)]
@@ -178,11 +178,11 @@ pub struct Instr {
     op2: Option<Operands>,
 }
 
-impl Cpu {
+impl<Cart: Cartridge> Cpu<Cart> {
     //TODO: Add an API to build the CPU in a state that
     //      does not skip the boot rom
 
-    pub fn new(bus: Bus) -> Self {
+    pub fn new(bus: Bus<Cart>) -> Self {
         Cpu {
             a: 0x01,
             b: 0x00,

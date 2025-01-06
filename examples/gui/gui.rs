@@ -1,4 +1,5 @@
-use gb_rs::{gb::GbRs, rom::Rom};
+use gb_rs::gb::GbRs;
+use gb_rs::gb::SmallInMemoryCartridge;
 use pixels::wgpu;
 use std::time::Instant;
 
@@ -17,7 +18,7 @@ const HEIGHT: u32 = 144;
 
 /// Manages all state required for rendering Dear ImGui over `Pixels`.
 pub(crate) struct Gui {
-    gb: GbRs,
+    gb: GbRs<SmallInMemoryCartridge>,
     event_loop: EventLoop<()>,
     pixels: Pixels,
 
@@ -33,7 +34,7 @@ pub(crate) struct Gui {
 }
 
 impl Gui {
-    pub fn new(gb: GbRs) -> Self {
+    pub fn new(gb: GbRs<SmallInMemoryCartridge>) -> Self {
         let event_loop = EventLoop::new();
         let window = {
             let size = LogicalSize::new(SCALING * WIDTH as f64, SCALING * HEIGHT as f64);
@@ -236,7 +237,8 @@ impl Gui {
 fn main() -> std::io::Result<()> {
     let rom_path = std::path::Path::new("roms/tetris.gb");
     let rom = std::fs::read(rom_path).expect("Unable to load test rom: {rom_path}");
-    let gb = GbRs::new(&rom);
+    let cart = SmallInMemoryCartridge::from_slice(&rom);
+    let gb = GbRs::new(cart);
     let gui = Gui::new(gb);
     gui.run();
 
