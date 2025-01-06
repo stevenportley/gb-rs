@@ -137,7 +137,7 @@ impl<Cart: Cartridge> Device for MBC1<Cart> {
             /* Registers */
             0..=0x1FFF => {
                 if (val & 0xF) == 0xA {
-                    panic!("Enabling ram");
+                    //panic!("Enabling ram");
                     self.ram_en = true
                 } else {
                     self.ram_en = false
