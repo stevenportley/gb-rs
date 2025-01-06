@@ -160,7 +160,7 @@ impl<const ROM_SIZE: usize, R: Ram> MBC1<ROM_SIZE, R> {
         assert!(rom.len() <= ROM_SIZE);
         Self {
             ram_en: false,
-            rom_bank_num: 0,
+            rom_bank_num: 1,
             adv_bank_mode: false,
             ram_bank_num: 1,
             rom: Rom::from_slice(rom).expect("Failed to build ROM"),
@@ -172,9 +172,6 @@ impl<const ROM_SIZE: usize, R: Ram> MBC1<ROM_SIZE, R> {
 
 impl<const ROM_SIZE: usize, R: Ram> Device for MBC1<ROM_SIZE, R> {
     fn write(&mut self, addr: u16, val: u8) {
-        if addr < 0xA000 {
-            //panic!("Writing to RAM: Addr {:?}, Val {:?}", addr, val);
-        }
         match addr {
             /* Registers */
             0..=0x1FFF => {
@@ -204,8 +201,8 @@ impl<const ROM_SIZE: usize, R: Ram> Device for MBC1<ROM_SIZE, R> {
             /* Memory banks */
             0xA000..=0xBFFF => {
                 if !self.ram_en {
-                    //panic!("Writing to disabled RAM");
-                    //return;
+                    // Ignore writes to disabled RAM
+                    return;
                 }
 
                 let offset = (addr - 0xA000) as u32
