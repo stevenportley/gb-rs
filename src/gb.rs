@@ -58,9 +58,12 @@ impl<const ROM_SIZE: usize, const RAM_SIZE: usize> InMemoryCartridge<ROM_SIZE, R
             panic!("This cartiridge does not support RAM!");
         }
 
+        let mut ram = Vec::new();
+        ram.resize(ram.capacity(), 0).expect("Unable to resize RAM");
+
         Self {
             rom: Vec::from_slice(data).expect("Building rom failed?"),
-            ram: Vec::new(),
+            ram,
         }
     }
 }
@@ -89,4 +92,4 @@ impl<const ROM_SIZE: usize, const RAM_SIZE: usize> Cartridge
 }
 
 pub type SmallInMemoryCartridge = InMemoryCartridge<0x8000, 0>;
-pub type LargeInMemoryCartridge = InMemoryCartridge<0x10000, 0x8000>;
+pub type LargeInMemoryCartridge = InMemoryCartridge<0x80000, 0x8000>;
