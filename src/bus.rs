@@ -3,8 +3,8 @@ use heapless::Vec;
 
 use crate::interrupts::{IntSource, InterruptController};
 use crate::joypad::Joypad;
+use crate::mbc::MBC;
 use crate::ppu::PPU;
-use crate::rom::Rom;
 use crate::timer::Timer;
 
 pub trait Device {
@@ -12,29 +12,15 @@ pub trait Device {
     fn read(&self, addr: u16) -> u8;
 }
 
-pub trait Bus: Device {
-    fn run_cycles(&mut self, cycles: u16);
-    fn query_interrupt(&mut self) -> Option<IntSource>;
-    // TODO: Remove this API and make `query_interrupt` automatically clear
-    fn clear_interrupt(&mut self, interrupt: IntSource);
-    // TODO: Remove this API once we have a better one for serial
-    fn is_passed(&self) -> bool;
-    // TODO: Remove this, without it HALT breaks??
-    fn interrupt_pending(&self) -> bool;
-}
-
 #[derive(Default)]
 struct BusStats {
-    rom_writes: u16,
     prohibited_area: u16,
     unmapped: u16,
     echo: u16,
 }
 
-pub struct StaticBus {
-    pub rom: Rom,
+pub struct Bus {
     pub ppu: PPU,
-    eram: [u8; 0x2000],
     wram: [u8; 0x1000],
     mapped_wram: [u8; 0x1000],
     pub timer: Timer,
@@ -44,46 +30,20 @@ pub struct StaticBus {
     hram: [u8; 0x7F],
     passed_buf: Deque<u8, 6>,
     stats: BusStats,
+    pub rom: MBC<65536>,
 }
 
-impl StaticBus {
-    pub fn new(rom: Rom) -> Self {
-        Self {
-            rom,
-            ppu: PPU::new(),
-            eram: [0; 0x2000],
-            wram: [0; 0x1000],
-            mapped_wram: [0; 0x1000],
-            timer: Timer::new(),
-            int_controller: InterruptController::new(),
-            joypad: Joypad::new(),
-            io: [0; 0x80],
-            hram: [0; 0x7F],
-            passed_buf: Deque::new(),
-            stats: BusStats::default(),
-        }
-    }
-
-    pub fn is_passed(&self) -> bool {
-        let buf: Vec<_, 10> = self.passed_buf.clone().into_iter().collect();
-        let str = core::str::from_utf8(&buf).expect("No!");
-
-        let moon_passed: [u8; 6] = [3, 5, 8, 13, 21, 34];
-        return str == "Passed" || buf.ends_with(&moon_passed);
-    }
-}
-
-impl Device for StaticBus {
+impl Device for Bus {
     fn write(&mut self, addr: u16, val: u8) {
         match addr {
             0..=0x7FFF => {
-                self.stats.rom_writes += 1;
+                self.rom.write(addr, val);
             }
             0x8000..=0x9FFF => {
                 self.ppu.write(addr, val);
             }
             0xA000..=0xBFFF => {
-                self.eram[addr as usize - 0xA000] = val;
+                self.rom.write(addr, val);
             }
             0xC000..=0xCFFF => {
                 self.wram[addr as usize - 0xC000] = val;
@@ -157,9 +117,7 @@ impl Device for StaticBus {
             0x8000..=0x9FFF => {
                 return self.ppu.read(addr);
             }
-            0xA000..=0xBFFF => {
-                return self.eram[addr as usize - 0xA000];
-            }
+            0xA000..=0xBFFF => self.rom.read(addr),
             0xC000..=0xCFFF => {
                 return self.wram[addr as usize - 0xC000];
             }
@@ -210,16 +168,40 @@ impl Device for StaticBus {
     }
 }
 
-impl Bus for StaticBus {
-    fn query_interrupt(&mut self) -> Option<IntSource> {
+impl Bus {
+    pub fn new(rom: &[u8]) -> Self {
+        Self {
+            ppu: PPU::new(),
+            wram: [0; 0x1000],
+            mapped_wram: [0; 0x1000],
+            timer: Timer::new(),
+            int_controller: InterruptController::new(),
+            joypad: Joypad::new(),
+            io: [0; 0x80],
+            hram: [0; 0x7F],
+            passed_buf: Deque::new(),
+            stats: BusStats::default(),
+            rom: MBC::new(rom),
+        }
+    }
+
+    pub fn is_passed(&self) -> bool {
+        let buf: Vec<_, 10> = self.passed_buf.clone().into_iter().collect();
+        let str = core::str::from_utf8(&buf).expect("No!");
+
+        let moon_passed: [u8; 6] = [3, 5, 8, 13, 21, 34];
+        return str == "Passed" || buf.ends_with(&moon_passed);
+    }
+
+    pub fn query_interrupt(&mut self) -> Option<IntSource> {
         self.int_controller.next()
     }
 
-    fn clear_interrupt(&mut self, interrupt: IntSource) {
+    pub fn clear_interrupt(&mut self, interrupt: IntSource) {
         self.int_controller.interrupt_clear(interrupt);
     }
 
-    fn run_cycles(&mut self, cycles: u16) {
+    pub fn run_cycles(&mut self, cycles: u16) {
         /* Move along the PPU */
         let maybe_int = self.ppu.run(cycles as i32);
 
@@ -238,11 +220,7 @@ impl Bus for StaticBus {
         }
     }
 
-    fn is_passed(&self) -> bool {
-        self.is_passed()
-    }
-
-    fn interrupt_pending(&self) -> bool {
+    pub fn interrupt_pending(&self) -> bool {
         self.int_controller.pending()
     }
 }

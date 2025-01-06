@@ -1,4 +1,7 @@
-use crate::{bus::Bus, interrupts::IntSource};
+use crate::{
+    bus::{Bus, Device},
+    interrupts::IntSource,
+};
 
 fn does_bit3_overflow(a: u8, b: u8) -> bool {
     let a = a & 0xF;
@@ -20,7 +23,7 @@ fn does_bit3_borrow(a: u8, b: u8) -> bool {
     return b > a;
 }
 
-pub struct Cpu<B: Bus> {
+pub struct Cpu {
     a: u8,
     b: u8,
     c: u8,
@@ -39,7 +42,7 @@ pub struct Cpu<B: Bus> {
     ime: bool,
 
     pub sleep: bool,
-    pub bus: B,
+    pub bus: Bus,
 }
 
 #[derive(Debug)]
@@ -175,11 +178,11 @@ pub struct Instr {
     op2: Option<Operands>,
 }
 
-impl<B: Bus> Cpu<B> {
+impl Cpu {
     //TODO: Add an API to build the CPU in a state that
     //      does not skip the boot rom
 
-    pub fn new(bus: B) -> Self {
+    pub fn new(bus: Bus) -> Self {
         Cpu {
             a: 0x01,
             b: 0x00,

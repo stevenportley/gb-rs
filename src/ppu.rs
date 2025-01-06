@@ -165,7 +165,8 @@ impl PPU {
                 return self.lyc;
             }
             0xFF46 => {
-                unimplemented!("Reading from DMA register!?!")
+                return 0xFF;
+                //unimplemented!("Reading from DMA register!?!")
             }
             0xFF47 => {
                 return self.bgp;

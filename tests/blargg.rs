@@ -8,9 +8,9 @@ use gb_rs::rom::Rom;
 fn rom_test(rom_path: &str) {
     let rom_path = Path::new(rom_path);
     let rom = read(rom_path).expect(format!("Unable to load test rom: {:?}", rom_path).as_str());
-    let rom = Rom::from_slice(rom.as_slice());
+    //let rom = Rom::from_slice(rom.as_slice());
 
-    let mut gb = GbRs::new(rom);
+    let mut gb = GbRs::new(&rom);
 
     let timeout = time::Instant::now() + time::Duration::from_secs(30);
 
