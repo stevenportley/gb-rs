@@ -1,5 +1,5 @@
-use gb_rs::gb::SmallInMemoryCartridge;
 use gb_rs::gb::GbRs;
+use gb_rs::gb::SmallInMemoryCartridge;
 use pixels::wgpu;
 use std::time::Instant;
 

@@ -402,7 +402,7 @@ fn main() -> std::io::Result<()> {
     //let rom_path = std::path::Path::new("tests/roms/blargg/testrom-cpuinstr-01.gb");
     let rom = std::fs::read(rom_path).expect("Unable to load test rom: {rom_path}");
 
-    let rom : LargeInMemoryCartridge = LargeInMemoryCartridge::from_slice(&rom);
+    let rom: LargeInMemoryCartridge = LargeInMemoryCartridge::from_slice(&rom);
     //let rom = SimpleCart::from_slice(&rom);
 
     let gb = GbRs::new(rom);

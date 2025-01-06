@@ -1,6 +1,6 @@
 use crate::bus::Device;
-use heapless::String;
 use core::ops::DerefMut;
+use heapless::String;
 
 #[derive(Debug)]
 pub struct CartridgeHeader {
@@ -17,8 +17,7 @@ pub struct CartridgeHeader {
     */
 }
 
-
-pub trait MemoryRegion : DerefMut<Target = [u8]>{}
+pub trait MemoryRegion: DerefMut<Target = [u8]> {}
 
 pub trait Cartridge {
     type Rom: DerefMut<Target = [u8]> + ?Sized;
@@ -34,7 +33,6 @@ pub enum MemoryBankController<Cart: Cartridge> {
     MBC0(Cart),
     MBC1(MBC1<Cart>),
 }
-
 
 pub fn get_cart_header(rom: &[u8]) -> CartridgeHeader {
     let title = (0x134..=0x143)
@@ -98,7 +96,10 @@ impl<Cart: Cartridge> MemoryBankController<Cart> {
         match header.cart_type {
             0 => MemoryBankController::MBC0(cart),
             1 | 2 | 3 => MemoryBankController::MBC1(MBC1::new(cart)),
-            _ => unimplemented!("MBC type not implemented! Cart type: {:?}", header.cart_type),
+            _ => unimplemented!(
+                "MBC type not implemented! Cart type: {:?}",
+                header.cart_type
+            ),
         }
     }
 
@@ -117,7 +118,6 @@ struct MBC1<Cart: Cartridge> {
     adv_bank_mode: bool,
     ram_bank_num: u8,
 }
-
 
 impl<Cart: Cartridge> MBC1<Cart> {
     fn new(cart: Cart) -> Self {
@@ -223,9 +223,6 @@ impl<Cart: Cartridge> Device for MBC1<Cart> {
         }
     }
 }
-
-
-
 
 /*
  * Preserving this incase we every want to do built-in rom things

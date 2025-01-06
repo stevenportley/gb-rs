@@ -46,8 +46,7 @@ pub struct InMemoryCartridge<const ROM_SIZE: usize, const RAM_SIZE: usize> {
     pub ram: Vec<u8, RAM_SIZE>,
 }
 
-impl<const ROM_SIZE: usize, const RAM_SIZE: usize>  InMemoryCartridge<ROM_SIZE, RAM_SIZE>  {
-
+impl<const ROM_SIZE: usize, const RAM_SIZE: usize> InMemoryCartridge<ROM_SIZE, RAM_SIZE> {
     pub fn from_slice(data: &[u8]) -> Self {
         let header = get_cart_header(data);
 
@@ -63,11 +62,12 @@ impl<const ROM_SIZE: usize, const RAM_SIZE: usize>  InMemoryCartridge<ROM_SIZE, 
             rom: Vec::from_slice(data).expect("Building rom failed?"),
             ram: Vec::new(),
         }
-
     }
 }
 
-impl<const ROM_SIZE: usize, const RAM_SIZE: usize>  Cartridge for InMemoryCartridge<ROM_SIZE, RAM_SIZE> {
+impl<const ROM_SIZE: usize, const RAM_SIZE: usize> Cartridge
+    for InMemoryCartridge<ROM_SIZE, RAM_SIZE>
+{
     type Rom = Vec<u8, ROM_SIZE>;
     type Ram = Vec<u8, RAM_SIZE>;
 
@@ -87,7 +87,6 @@ impl<const ROM_SIZE: usize, const RAM_SIZE: usize>  Cartridge for InMemoryCartri
         &mut self.ram
     }
 }
-
 
 pub type SmallInMemoryCartridge = InMemoryCartridge<0x8000, 0>;
 pub type LargeInMemoryCartridge = InMemoryCartridge<0x10000, 0x8000>;

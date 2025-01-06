@@ -1,6 +1,7 @@
 use crate::{
     bus::{Bus, Device},
-    interrupts::IntSource, mbc::Cartridge,
+    interrupts::IntSource,
+    mbc::Cartridge,
 };
 
 fn does_bit3_overflow(a: u8, b: u8) -> bool {
