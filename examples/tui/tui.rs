@@ -4,21 +4,22 @@ use gb_rs::{
     ppu::{BKG_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH},
     tile::Tile,
 };
-use std::io;
-
-use std::time::{Duration, Instant};
-
-use ratatui::layout::{Constraint, Layout};
-
-use crossterm::event::{self, Event, KeyCode, KeyEventKind};
-use crossterm::event::{
-    KeyboardEnhancementFlags, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
+use std::{
+    io,
+    time::{Duration, Instant},
 };
-use crossterm::execute;
+
+use crossterm::{
+    event::{
+        self, Event, KeyCode, KeyEventKind, KeyboardEnhancementFlags, PopKeyboardEnhancementFlags,
+        PushKeyboardEnhancementFlags,
+    },
+    execute,
+};
 
 use ratatui::{
     buffer::Buffer,
-    layout::Rect,
+    layout::{Constraint, Layout, Rect},
     style::Color,
     text::Line,
     widgets::{
@@ -27,6 +28,16 @@ use ratatui::{
     },
     DefaultTerminal, Frame,
 };
+
+use clap::Parser;
+
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    /// Name of the person to greet
+    #[arg(short, long)]
+    rom: String,
+}
 
 pub struct App {
     counter: u32,
@@ -395,24 +406,15 @@ fn run_tui(gb: GbRs<LargeInMemoryCartridge>) -> io::Result<()> {
 }
 
 fn main() -> std::io::Result<()> {
-    //let rom_path = std::path::Path::new("roms/tetris.gb");
-    //let rom_path = std::path::Path::new("testroms/dmg-acid2.gb");
-    //let rom_path = std::path::Path::new("roms/tennis.gb");
-    let rom_path = std::path::Path::new("roms/super_mario_land.gb");
-    //let rom_path = std::path::Path::new("tests/roms/blargg/testrom-cpuinstr-01.gb");
-    let rom = std::fs::read(rom_path).expect("Unable to load test rom: {rom_path}");
+    let args = Args::parse();
+
+    let rom_path = std::path::Path::new(&args.rom);
+    let rom = std::fs::read(rom_path)?;
 
     let rom: LargeInMemoryCartridge = LargeInMemoryCartridge::from_slice(&rom);
-    //let rom = SimpleCart::from_slice(&rom);
 
     let gb = GbRs::new(rom);
 
     run_tui(gb)?;
-    /*
-    use crate::gui::Gui;
-    let gui = Gui::new(gb);
-    gui.run();
-    */
-
     Ok(())
 }
