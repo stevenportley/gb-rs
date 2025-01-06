@@ -3,7 +3,8 @@ use heapless::Vec;
 
 use crate::interrupts::{IntSource, InterruptController};
 use crate::joypad::Joypad;
-use crate::mbc::MBC;
+use crate::mbc::Cartridge;
+use crate::mbc::MemoryBankController;
 use crate::ppu::PPU;
 use crate::timer::Timer;
 
@@ -19,7 +20,7 @@ struct BusStats {
     echo: u16,
 }
 
-pub struct Bus {
+pub struct Bus<Cart: Cartridge> {
     pub ppu: PPU,
     wram: [u8; 0x1000],
     mapped_wram: [u8; 0x1000],
@@ -30,20 +31,20 @@ pub struct Bus {
     hram: [u8; 0x7F],
     passed_buf: Deque<u8, 6>,
     stats: BusStats,
-    pub rom: MBC<65536>,
+    pub mbc: MemoryBankController<Cart>,
 }
 
-impl Device for Bus {
+impl<Cart: Cartridge> Device for Bus<Cart> {
     fn write(&mut self, addr: u16, val: u8) {
         match addr {
             0..=0x7FFF => {
-                self.rom.write(addr, val);
+                self.mbc.write(addr, val);
             }
             0x8000..=0x9FFF => {
                 self.ppu.write(addr, val);
             }
             0xA000..=0xBFFF => {
-                self.rom.write(addr, val);
+                self.mbc.write(addr, val);
             }
             0xC000..=0xCFFF => {
                 self.wram[addr as usize - 0xC000] = val;
@@ -112,12 +113,12 @@ impl Device for Bus {
     fn read(&self, addr: u16) -> u8 {
         match addr {
             0..=0x7FFF => {
-                return self.rom.read(addr);
+                return self.mbc.read(addr);
             }
             0x8000..=0x9FFF => {
                 return self.ppu.read(addr);
             }
-            0xA000..=0xBFFF => self.rom.read(addr),
+            0xA000..=0xBFFF => self.mbc.read(addr),
             0xC000..=0xCFFF => {
                 return self.wram[addr as usize - 0xC000];
             }
@@ -168,8 +169,8 @@ impl Device for Bus {
     }
 }
 
-impl Bus {
-    pub fn new(rom: &[u8]) -> Self {
+impl<Cart: Cartridge> Bus<Cart> {
+    pub fn new(cart: Cart) -> Self {
         Self {
             ppu: PPU::new(),
             wram: [0; 0x1000],
@@ -181,7 +182,7 @@ impl Bus {
             hram: [0; 0x7F],
             passed_buf: Deque::new(),
             stats: BusStats::default(),
-            rom: MBC::new(rom),
+            mbc: MemoryBankController::new(cart),
         }
     }
 
