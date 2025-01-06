@@ -3,8 +3,8 @@ use heapless::Vec;
 
 use crate::interrupts::{IntSource, InterruptController};
 use crate::joypad::Joypad;
-use crate::ppu::PPU;
 use crate::mbc::MBC;
+use crate::ppu::PPU;
 use crate::timer::Timer;
 
 pub trait Device {
@@ -117,9 +117,7 @@ impl Device for Bus {
             0x8000..=0x9FFF => {
                 return self.ppu.read(addr);
             }
-            0xA000..=0xBFFF => {
-                self.rom.read(addr)
-            }
+            0xA000..=0xBFFF => self.rom.read(addr),
             0xC000..=0xCFFF => {
                 return self.wram[addr as usize - 0xC000];
             }
@@ -188,7 +186,6 @@ impl Bus {
     }
 
     pub fn is_passed(&self) -> bool {
-
         let buf: Vec<_, 10> = self.passed_buf.clone().into_iter().collect();
         let str = core::str::from_utf8(&buf).expect("No!");
 

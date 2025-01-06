@@ -1,4 +1,3 @@
-
 use crate::bus::Device;
 use heapless::String;
 use heapless::Vec;
@@ -30,7 +29,6 @@ impl Ram for SimpleRam {
     fn read(&self, addr: u32) -> u8 {
         self.ram[addr as usize]
     }
-
 }
 
 pub trait Ram {
@@ -46,22 +44,20 @@ pub enum MBC<const ROM_SIZE: usize> {
 }
 
 fn get_header(rom: &[u8]) -> CartridgeHeader {
-
     let title = (0x134..=0x143)
-            .into_iter()
-            .map(|addr| rom[addr])
-            .take_while(|b| *b != 0 )
-            .collect();
+        .into_iter()
+        .map(|addr| rom[addr])
+        .take_while(|b| *b != 0)
+        .collect();
     let title = String::from_utf8(title).expect("The title is invalid UTF-8");
 
-
     let manufacturer_code = (0x13F..=0x143)
-            .into_iter()
-            .map(|addr| rom[addr])
-            .take_while(|b| *b != 0 )
-            .collect();
-    let manufacturer_code = String::from_utf8(manufacturer_code).expect("The manufacturer is invalid UTF-8");
-
+        .into_iter()
+        .map(|addr| rom[addr])
+        .take_while(|b| *b != 0)
+        .collect();
+    let manufacturer_code =
+        String::from_utf8(manufacturer_code).expect("The manufacturer is invalid UTF-8");
 
     let rom_size = 32768 * (1 << rom[0x148]);
     let ram_size = match rom[0x149] {
@@ -89,7 +85,7 @@ fn get_header(rom: &[u8]) -> CartridgeHeader {
 impl<const ROM_SIZE: usize> Device for MBC<ROM_SIZE> {
     fn write(&mut self, addr: u16, val: u8) {
         match self {
-            MBC::NoMBC { .. } => { /* NOP */ },
+            MBC::NoMBC { .. } => { /* NOP */ }
             MBC::MBC1 { mbc } => mbc.write(addr, val),
         }
     }
@@ -103,23 +99,19 @@ impl<const ROM_SIZE: usize> Device for MBC<ROM_SIZE> {
 }
 
 impl<const ROM_SIZE: usize> MBC<ROM_SIZE> {
-
     pub fn new(rom: &[u8]) -> Self {
         let header = get_header(rom);
 
         match header.cart_type {
-            0 => { 
-                MBC::NoMBC { rom: Rom::from_slice(rom).expect("Failed to build No MBC") }
+            0 => MBC::NoMBC {
+                rom: Rom::from_slice(rom).expect("Failed to build No MBC"),
             },
             1 | 2 | 3 => {
-                let mut a = MBC::MBC1 { mbc: MBC1::new(rom, 
-                    SimpleRam{ 
-                        ram: Rom::new()
-                    }) 
+                let mut a = MBC::MBC1 {
+                    mbc: MBC1::new(rom, SimpleRam { ram: Rom::new() }),
                 };
 
                 loop {
-
                     if let MBC::MBC1 { mbc } = &mut a {
                         if mbc.ram.ram.is_full() {
                             break;
@@ -129,12 +121,14 @@ impl<const ROM_SIZE: usize> MBC<ROM_SIZE> {
                 }
 
                 a
-
-            },
-            _ => { unimplemented!("MBC type not implemented! Cart type: {:?}", header.cart_type) },
-            
+            }
+            _ => {
+                unimplemented!(
+                    "MBC type not implemented! Cart type: {:?}",
+                    header.cart_type
+                )
+            }
         }
-
     }
 
     pub fn get_header(&self) -> CartridgeHeader {
@@ -155,7 +149,6 @@ struct MBC1<const ROM_SIZE: usize, R: Ram> {
 }
 
 impl<const ROM_SIZE: usize, R: Ram> MBC1<ROM_SIZE, R> {
-
     fn new(rom: &[u8], ram: R) -> Self {
         assert!(rom.len() <= ROM_SIZE);
         Self {
@@ -167,7 +160,6 @@ impl<const ROM_SIZE: usize, R: Ram> MBC1<ROM_SIZE, R> {
             ram,
         }
     }
-
 }
 
 impl<const ROM_SIZE: usize, R: Ram> Device for MBC1<ROM_SIZE, R> {
@@ -190,8 +182,7 @@ impl<const ROM_SIZE: usize, R: Ram> Device for MBC1<ROM_SIZE, R> {
                 if self.rom_bank_num == 0 {
                     self.rom_bank_num = 1;
                 }
-
-            },
+            }
             0x4000..=0x5FFF => self.ram_bank_num = val & 0x3,
             0x6000..=0x7FFF => {
                 unimplemented!("Not implementing advanced banking mode!");
@@ -233,12 +224,11 @@ impl<const ROM_SIZE: usize, R: Ram> Device for MBC1<ROM_SIZE, R> {
 
             /* ROM Bank X */
             0x4000..=0x7FFF => {
-                let addr = (addr as usize - 0x4000)
-                    | (self.rom_bank_num as usize) << 14;
+                let addr = (addr as usize - 0x4000) | (self.rom_bank_num as usize) << 14;
 
-                //TODO On smaller cartridges, the upper bits 
+                //TODO On smaller cartridges, the upper bits
                 //     here are ignored, but not always
-                    //| (self.ram_bank_num as usize) << 19I;
+                //| (self.ram_bank_num as usize) << 19I;
                 self.rom[addr]
             }
 
