@@ -1971,5 +1971,4 @@ impl<Cart: Cartridge> Cpu<Cart> {
         self.bus.clear_interrupt(int_source);
         return 5;
     }
-
 }
