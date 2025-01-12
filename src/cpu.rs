@@ -1971,11 +1971,4 @@ impl<Cart: Cartridge> Cpu<Cart> {
         self.bus.clear_interrupt(int_source);
         return 5;
     }
-
-    pub fn get_next_instrs<const N: usize>(&mut self) -> [Instr; N] {
-        let curr_pc = self.pc;
-        let instrs: [Instr; N] = core::array::from_fn(|_index| self.next_instr());
-        self.pc = curr_pc;
-        return instrs;
-    }
 }

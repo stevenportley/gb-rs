@@ -161,15 +161,8 @@ impl App {
             bot_left,
         );
 
-        let instr_trace = self.gb.cpu.get_next_instrs::<20>();
-
         frame.render_widget(
             Paragraph::new(vec![
-                Line::from(format!("{:?}", instr_trace[0])),
-                Line::from(format!("{:?}", instr_trace[1])),
-                Line::from(format!("{:?}", instr_trace[2])),
-                Line::from(format!("{:?}", instr_trace[3])),
-                Line::from(format!("{:?}", instr_trace[4])),
                 Line::from(format!("{:?}", size_of_val(&self.gb))),
                 Line::from(format!("Emu FPS: {:?}", 1.0 / self.emu_time.as_secs_f64())),
                 Line::from(format!(
