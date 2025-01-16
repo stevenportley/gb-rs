@@ -20,9 +20,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: cargo check --verbose
-      - run: cargo check --benches --verbose
-      - run: cargo check --example gui --verbose
-      - run: cargo check --example tui --verbose
 
   ci_matrix:
     strategy:
@@ -53,3 +50,5 @@ jobs:
       run: cargo build --example gui
     - name: Run tests
       run: cargo test --verbose
+    - name: Run benchmarks
+      run: cargo bench --verbose
