@@ -8,17 +8,18 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: cargo check --verbose
 
   format:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - run: cargo fmt --check
+
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo check --verbose
 
   ci_matrix:
     strategy:
@@ -49,3 +50,5 @@ jobs:
       run: cargo build --example gui
     - name: Run tests
       run: cargo test --verbose
+    - name: Run benchmarks
+      run: cargo bench --verbose
