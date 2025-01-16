@@ -347,8 +347,6 @@ impl PPU {
 
             PpuMode::DRAW => {
                 // Exiting DRAW state
-                // TODO: update line
-                // TODO: Incorproate SCX
 
                 let bg_line = self.render_bg_line(self.ly.wrapping_add(self.scy));
                 let ly = self.ly as usize;
