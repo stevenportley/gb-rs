@@ -89,8 +89,7 @@ impl<'a> OamMap<'a> {
 
     pub fn get_oams_line(&self, ly: u8, large_tiles: bool) -> Vec<&OamEntry, 10> {
         // The PPU only generates the first 10
-
-        let mut oams = Vec::new();
+        let mut oams: Vec<&OamEntry, 10> = Vec::new();
 
         let tile_height = if large_tiles { 16 } else { 8 };
 
@@ -112,11 +111,15 @@ impl<'a> OamMap<'a> {
             let adj_ly = ly + 16;
 
             if adj_ly >= tile_y_pos && adj_ly < tile_y_pos + tile_height {
-                let _ = oams.push(oam_entry);
+                // This will maintain a reverse-sorted list of OAM entries
+                // by their X position. `<` is used rather than `<=` because
+                // entries earlier in RAM are higher priority if X is the same.
+                let idx = oams.partition_point(|&o| oam_entry.x_pos() < o.x_pos());
+
+                let _ = oams.insert(idx, oam_entry);
             }
         }
 
-        oams.sort_unstable_by(|l, r| r.x_pos().cmp(&l.x_pos()));
         oams
     }
 
