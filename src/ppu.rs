@@ -37,6 +37,8 @@ pub struct PPU {
     obp1: u8,
     wy: u8,
     wx: u8,
+    window_triggered: bool,
+    window_counter: u8,
     mode: PpuMode,
     r_cyc: i32,
     pub screen: Frame,
@@ -82,6 +84,8 @@ impl PPU {
             obp1: 0,
             wy: 0,
             wx: 0,
+            window_triggered: false,
+            window_counter: 0,
             mode: PpuMode::OAMSCAN,
             r_cyc: 20,
             screen: Frame::new(),
@@ -211,27 +215,28 @@ impl PPU {
         }
 
         // Window
-        if self.lcdc & 0x20 != 0 {
-            if self.ly >= self.wy {
+        if self.lcdc & 0x20 != 0 && self.window_triggered {
                 let wx = self.wx as usize;
                 let window_line = if (self.lcdc & 0x1) == 0 {
                     [0; 256]
                 } else {
-                    self.render_window_line(self.ly - self.wy)
+                    self.render_window_line(self.window_counter)
                 };
                 let screen_line = &mut self.screen.buf[ly];
 
                 if wx < 8 {
                     let window_offset = 7 - wx;
                     screen_line.copy_from_slice(&window_line[window_offset..window_offset + 160]);
+                    self.window_counter += 1;
                 } else if wx > 166 {
                     // Window not visible
                 } else {
                     let screen_offset = wx - 7;
                     let window_len = 160 - screen_offset;
                     screen_line[screen_offset..].copy_from_slice(&window_line[..window_len]);
+                    self.window_counter += 1;
                 }
-            }
+
         }
 
         // Sprites
@@ -455,6 +460,7 @@ impl PPU {
                 // based on PPU / OAM state
                 self.mode = PpuMode::DRAW;
                 self.r_cyc = 43 - over_cycles;
+
             }
 
             PpuMode::DRAW => {
@@ -488,6 +494,9 @@ impl PPU {
                 } else {
                     self.mode = PpuMode::OAMSCAN;
                     self.r_cyc = 20 - over_cycles;
+                    if self.ly == self.wy {
+                        self.window_triggered = true;
+                    }
 
                     // Check for LYC int
                     if (self.stat & 0x40) != 0 {
@@ -509,6 +518,8 @@ impl PPU {
                     self.mode = PpuMode::OAMSCAN;
                     self.r_cyc = 20 - over_cycles;
                     self.ly = 0;
+                    self.window_counter = 0;
+                    self.window_triggered = false;
 
                     // Check for OAM scan interrupt
                     if (self.stat & 0x20) != 0 {
