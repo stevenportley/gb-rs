@@ -1,6 +1,6 @@
 use crate::bus::Bus;
 use crate::cpu::Cpu;
-use crate::mbc::{get_cart_header, Cartridge, CartridgeHeader};
+use crate::mbc::{get_cart_header, Cartridge};
 use crate::ppu::SCREEN_HEIGHT;
 use heapless::Vec;
 
