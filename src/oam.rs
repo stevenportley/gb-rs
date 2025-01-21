@@ -6,10 +6,10 @@ pub struct OamEntry<'a> {
 }
 
 pub struct OamFlags {
-    low_priority: bool,
-    y_flip: bool,
-    x_flip: bool,
-    dmg_palette: bool,
+    pub low_priority: bool,
+    pub y_flip: bool,
+    pub x_flip: bool,
+    pub dmg_palette: bool,
     // These are GB color only
     //bank: bool,
     //cgb_pallete: u8,
@@ -48,21 +48,24 @@ impl<'a> OamEntry<'a> {
         let flags = self.oam_flags();
         let mut tile_idx = self.tile_idx();
 
+        if flags.y_flip {
+            line_idx = if large_tiles {
+                15 - line_idx
+            } else {
+                7 - line_idx
+            };
+        }
+
         if large_tiles {
             if line_idx >= 8 {
-                tile_idx = tile_idx & 0xFE;
+                tile_idx = tile_idx | 0x01;
                 line_idx -= 8;
             } else {
-                tile_idx = tile_idx | 0x01;
+                tile_idx = tile_idx & 0xFE;
             }
         }
 
         let tile = &tiles[tile_idx as usize];
-
-        if flags.y_flip {
-            //TODO: Assumes 8 pixels in height
-            line_idx = 7 - line_idx;
-        }
 
         let mut pixels = tile.pixel_buf(line_idx);
 
@@ -142,64 +145,6 @@ impl<'a> OamMap<'a> {
 
         oams
     }
-
-    pub fn render_line(&self, pixels: &mut [u8], tiles: &[Tile], ly: u8, large_tiles: bool) -> u32 {
-        assert_eq!(pixels.len(), 160);
-
-        let oams = self.get_oams_line(ly, large_tiles);
-
-        for oam in oams {
-            let x = oam.x_pos() as usize;
-
-            if x == 0 || x >= 168 {
-                // Off the screen
-                continue;
-            }
-
-            // Shift LY to sprite y_pos space,
-            // it's offset by 16 to allow scrolling in
-            let sprite_offset = (ly + 16) - oam.y_pos();
-
-            let oam_pixels = oam.get_pixels(tiles, sprite_offset, large_tiles);
-
-            let (dst, src) = {
-                if x < 8 {
-                    // Clipped at beginning of line
-                    (&mut pixels[..x], &oam_pixels[8 - x..])
-                    //pixels[..x].copy_from_slice(&oam_pixels[8 - x..]);
-                } else if x > 160 {
-                    // Clipped at end of line
-                    let b = 168 - x;
-                    (&mut pixels[x - 8..], &oam_pixels[..b])
-                    //pixels[x - 8..].copy_from_slice(&oam_pixels[..b]);
-                } else {
-                    (&mut pixels[x - 8..x], &oam_pixels[..])
-                    //pixels[x - 8..x].copy_from_slice(&oam_pixels);
-                }
-            };
-
-            assert!(dst.len() == src.len());
-
-            //TODO: Find a cleaner way to do this
-
-            if oam.oam_flags().low_priority {
-                for i in 0..dst.len() {
-                    if dst[i] == 0 {
-                        dst[i] = src[i];
-                    }
-                }
-            } else {
-                for i in 0..dst.len() {
-                    if src[i] != 0 {
-                        dst[i] = src[i];
-                    }
-                }
-            }
-        }
-
-        // TODO: This is the minimum clk cycles, make this accurate
-        172 / 4
-    }
 }
 
 #[cfg(test)]
@@ -234,26 +179,6 @@ mod tests {
         assert!(!flags.dmg_palette);
     }
 
-    fn get_test_tiles() -> [Tile<'static>; 4] {
-        static BYTES: [u8; 64] = [
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00,
-            0xFF, 0x00, 0xFF, 0x00, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF,
-            0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-            0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-        ];
-        assert_eq!(BYTES.len(), 64);
-
-        let tiles = [
-            Tile::from_bytes(&BYTES[0..16]),
-            Tile::from_bytes(&BYTES[16..32]),
-            Tile::from_bytes(&BYTES[32..48]),
-            Tile::from_bytes(&BYTES[48..64]),
-        ];
-
-        tiles
-    }
-
     fn get_weird_tile() -> Tile<'static> {
         static BYTES: [u8; 16] = [
             0x0F, 0x0F, 0x0F, 0x0F, 0x0F, 0x0F, 0x0F, 0x0F, 0xF0, 0x0F, 0xF0, 0x0F, 0xF0, 0x0F,
@@ -261,112 +186,6 @@ mod tests {
         ];
 
         Tile::from_bytes(&BYTES)
-    }
-
-    #[test]
-    fn oam_overlap() {
-        let mut mem = [0; 0xA0];
-
-        // 4 OAM entries that overlap
-        // starting at 0
-        mem[0] = 10;
-        mem[1] = 8;
-        mem[2] = 0;
-
-        mem[4] = 10;
-        mem[5] = 10;
-        mem[6] = 1;
-
-        mem[8] = 10;
-        mem[9] = 12;
-        mem[10] = 2;
-
-        mem[12] = 10;
-        mem[13] = 14;
-        mem[14] = 3;
-
-        let oam_map = OamMap::from_mem(&mem);
-        let oams = oam_map.get_oams_screen();
-
-        assert_eq!(oams.len(), 4);
-
-        let mut pixels = [0; 160];
-        let _ = oam_map.render_line(&mut pixels, &get_test_tiles(), 0, false);
-
-        // TODO: Make sure that this is actually what we want
-        assert_eq!(pixels[0..14], [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 3, 3]);
-        for val in &pixels[14..] {
-            assert_eq!(*val, 0);
-        }
-    }
-
-    #[test]
-    fn oam_blank() {
-        let mem = [0; 0xA0];
-        let oam_map = OamMap::from_mem(&mem);
-        let oams = oam_map.get_oams_screen();
-
-        assert_eq!(oams.len(), 0);
-
-        let mut pixels = [0; 160];
-        let _ = oam_map.render_line(&mut pixels, &get_test_tiles(), 0, false);
-        assert_eq!(pixels, [0; 160]);
-    }
-
-    #[test]
-    fn oam_single_sprite() {
-        let mut mem = [0; 0xA0];
-        mem[8] = 10;
-        mem[9] = 0x50;
-        mem[10] = 2;
-
-        let oam_map = OamMap::from_mem(&mem);
-        let oams = oam_map.get_oams_screen();
-
-        assert_eq!(oams.len(), 1);
-
-        let mut pixels = [0; 160];
-        let _ = oam_map.render_line(&mut pixels, &get_test_tiles(), 0, false);
-
-        let x_pos = (oams[0].x_pos() - 8) as usize;
-        assert_eq!(pixels[x_pos..x_pos + 8], [2; 8]);
-    }
-
-    #[test]
-    fn oam_left_clip() {
-        let mut mem = [0; 0xA0];
-        mem[8] = 10;
-        mem[9] = 2;
-        mem[10] = 1;
-
-        let oam_map = OamMap::from_mem(&mem);
-        let oams = oam_map.get_oams_screen();
-
-        assert_eq!(oams.len(), 1);
-
-        let mut pixels = [0; 160];
-        let _ = oam_map.render_line(&mut pixels, &get_test_tiles(), 0, false);
-
-        assert_eq!(pixels[0..2], [1, 1]);
-        assert_eq!(pixels[2..], [0; 158]);
-    }
-
-    #[test]
-    fn oam_right_clip() {
-        let mut mem = [0; 0xA0];
-        mem[8] = 10;
-        mem[9] = 164;
-        mem[10] = 1;
-
-        let oam_map = OamMap::from_mem(&mem);
-        let oams = oam_map.get_oams_screen();
-        assert_eq!(oams.len(), 1);
-
-        let mut pixels = [0; 160];
-        let _ = oam_map.render_line(&mut pixels, &get_test_tiles(), 0, false);
-
-        assert_eq!(pixels[0..156], [0; 156]);
-        assert_eq!(pixels[156..], [1; 4]);
     }
 
     #[test]

@@ -37,6 +37,8 @@ pub struct PPU {
     obp1: u8,
     wy: u8,
     wx: u8,
+    window_triggered: bool,
+    window_counter: u8,
     mode: PpuMode,
     r_cyc: i32,
     pub screen: Frame,
@@ -82,6 +84,8 @@ impl PPU {
             obp1: 0,
             wy: 0,
             wx: 0,
+            window_triggered: false,
+            window_counter: 0,
             mode: PpuMode::OAMSCAN,
             r_cyc: 20,
             screen: Frame::new(),
@@ -185,6 +189,118 @@ impl PPU {
             }
             _ => {
                 unreachable!("Invalid read from PPU? addr:{:?}", addr);
+            }
+        }
+    }
+
+    fn render_pixel(color_id: u8, pallete: u8) -> u8 {
+        return (pallete >> (2 * color_id)) & 0x3;
+    }
+
+    fn render_line(&mut self) {
+        //TODO: Better timing
+
+        // Background
+        let bg_line = if (self.lcdc & 0x1) == 0 {
+            [0; 256]
+        } else {
+            self.render_bg_line(self.ly.wrapping_add(self.scy))
+        };
+
+        let ly = self.ly as usize;
+
+        let mut bg_iter = bg_line.iter().cycle().skip(self.scx.into());
+        for pixel in &mut self.screen.buf[ly] {
+            *pixel = Self::render_pixel(*bg_iter.next().unwrap(), self.bgp);
+        }
+
+        // Window
+        if self.lcdc & 0x20 != 0 && self.window_triggered {
+            let wx = self.wx as usize;
+            let window_line = if (self.lcdc & 0x1) == 0 {
+                [0; 256]
+            } else {
+                self.render_window_line(self.window_counter)
+            };
+            let screen_line = &mut self.screen.buf[ly];
+
+            if wx < 8 {
+                let window_offset = 7 - wx;
+                screen_line.copy_from_slice(&window_line[window_offset..window_offset + 160]);
+                self.window_counter += 1;
+            } else if wx > 166 {
+                // Window not visible
+            } else {
+                let screen_offset = wx - 7;
+                let window_len = 160 - screen_offset;
+                screen_line[screen_offset..].copy_from_slice(&window_line[..window_len]);
+                self.window_counter += 1;
+            }
+        }
+
+        // Sprites
+        if self.obj_en() {
+            let oam_map = OamMap::from_mem(&self.oam);
+
+            let sprite_tiles: [Tile; 256] = core::array::from_fn(|tile_index| {
+                let vram_index = tile_index * 16;
+                Tile::from_bytes(&self.vram[vram_index..vram_index + 16])
+            });
+
+            let large_sprites = self.large_sprites();
+            let oams = oam_map.get_oams_line(self.ly, large_sprites);
+
+            for oam in oams {
+                let x = oam.x_pos() as usize;
+
+                if x == 0 || x >= 168 {
+                    // Off the screen
+                    continue;
+                }
+
+                // Shift LY to sprite y_pos space,
+                // it's offset by 16 to allow scrolling in
+                let sprite_offset = (self.ly + 16) - oam.y_pos();
+
+                let oam_pixels = oam.get_pixels(&sprite_tiles, sprite_offset, large_sprites);
+                let screen_line = &mut self.screen.buf[ly];
+
+                let (dst, src) = {
+                    if x < 8 {
+                        // Clipped at beginning of line
+                        (&mut screen_line[..x], &oam_pixels[8 - x..])
+                    } else if x > 160 {
+                        // Clipped at end of line
+                        let b = 168 - x;
+                        (&mut screen_line[x - 8..], &oam_pixels[..b])
+                    } else {
+                        (&mut screen_line[x - 8..x], &oam_pixels[..])
+                    }
+                };
+
+                assert!(dst.len() == src.len());
+
+                //TODO: Find a cleaner way to do this
+
+                let pal = if oam.oam_flags().dmg_palette {
+                    self.obp1
+                } else {
+                    self.obp0
+                };
+
+                if oam.oam_flags().low_priority {
+                    for i in 0..dst.len() {
+                        if dst[i] == 0 {
+                            dst[i] = Self::render_pixel(src[i], pal);
+                        }
+                    }
+                } else {
+                    for i in 0..dst.len() {
+                        if src[i] != 0 {
+                            dst[i] = Self::render_pixel(src[i], pal);
+                        }
+                    }
+                }
             }
         }
     }
@@ -347,60 +463,7 @@ impl PPU {
 
             PpuMode::DRAW => {
                 // Exiting DRAW state
-
-                let bg_line = self.render_bg_line(self.ly.wrapping_add(self.scy));
-                let ly = self.ly as usize;
-
-                let scx = self.scx as usize;
-
-                //TODO: Cleaner way to do this?
-                if scx + 160 > 255 {
-                    let first_cpy_len = bg_line[scx..].len() as usize;
-                    self.screen.buf[ly][0..first_cpy_len].copy_from_slice(&bg_line[scx..]);
-                    self.screen.buf[ly][first_cpy_len..]
-                        .copy_from_slice(&bg_line[..160 - first_cpy_len]);
-                } else {
-                    self.screen.buf[ly].copy_from_slice(&bg_line[scx..scx + 160]);
-                }
-
-                // Window is enabled
-                if self.lcdc & 0x20 != 0 {
-                    if self.ly >= self.wy {
-                        let wx = self.wx as usize;
-                        let window_line = self.render_window_line(self.ly - self.wy);
-                        let screen_line = &mut self.screen.buf[ly];
-
-                        if wx < 8 {
-                            let window_offset = 7 - wx;
-                            screen_line
-                                .copy_from_slice(&window_line[window_offset..window_offset + 160]);
-                        } else if wx > 166 {
-                            // Window not visible
-                        } else {
-                            let screen_offset = wx - 7;
-                            let window_len = 160 - screen_offset;
-                            screen_line[screen_offset..]
-                                .copy_from_slice(&window_line[..window_len]);
-                        }
-                    }
-                }
-
-                if self.obj_en() {
-                    let oam_map = OamMap::from_mem(&self.oam);
-
-                    let sprite_tiles: [Tile; 256] = core::array::from_fn(|tile_index| {
-                        let vram_index = tile_index * 16;
-                        Tile::from_bytes(&self.vram[vram_index..vram_index + 16])
-                    });
-
-                    let large_sprites = self.large_sprites();
-                    oam_map.render_line(
-                        &mut self.screen.buf[ly],
-                        &sprite_tiles,
-                        self.ly,
-                        large_sprites,
-                    );
-                }
+                self.render_line();
 
                 // TODO: Use actual timing, not just 51
                 self.mode = PpuMode::HBLANK;
@@ -429,6 +492,9 @@ impl PPU {
                 } else {
                     self.mode = PpuMode::OAMSCAN;
                     self.r_cyc = 20 - over_cycles;
+                    if self.ly == self.wy {
+                        self.window_triggered = true;
+                    }
 
                     // Check for LYC int
                     if (self.stat & 0x40) != 0 {
@@ -450,6 +516,8 @@ impl PPU {
                     self.mode = PpuMode::OAMSCAN;
                     self.r_cyc = 20 - over_cycles;
                     self.ly = 0;
+                    self.window_counter = 0;
+                    self.window_triggered = false;
 
                     // Check for OAM scan interrupt
                     if (self.stat & 0x20) != 0 {
