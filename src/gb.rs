@@ -1,17 +1,17 @@
 use crate::bus::Bus;
+use crate::cart::{get_cart_header, CartridgeData};
 use crate::cpu::Cpu;
-use crate::mbc::{get_cart_header, Cartridge};
 use crate::ppu::SCREEN_HEIGHT;
 use heapless::Vec;
 
 const CYCLES_PER_FRAME: i32 = 17556;
 
-pub struct GbRs<Cart: Cartridge> {
-    pub cpu: Cpu<Cart>,
+pub struct GbRs<T: CartridgeData> {
+    pub cpu: Cpu<T>,
 }
 
-impl<Cart: Cartridge> GbRs<Cart> {
-    pub fn new(cart: Cart) -> Self {
+impl<T: CartridgeData> GbRs<T> {
+    pub fn new(cart: T) -> Self {
         Self {
             cpu: Cpu::new(Bus::new(cart)),
         }
@@ -37,25 +37,27 @@ impl<Cart: Cartridge> GbRs<Cart> {
     }
 }
 
+const ROM_SIZE: usize = 0x8000;
+
 // A small in memory cartridge implementation
 // suitable pretty much only for MBC type 0
-pub struct InMemoryCartridge<const ROM_SIZE: usize, const RAM_SIZE: usize> {
+pub struct SmallInMemoryCartridge {
     // Not sure arrays because
     // they don't implement DeRef???
     pub rom: Vec<u8, ROM_SIZE>,
-    pub ram: Vec<u8, RAM_SIZE>,
+    pub ram: Vec<u8, 0>,
 }
 
-impl<const ROM_SIZE: usize, const RAM_SIZE: usize> InMemoryCartridge<ROM_SIZE, RAM_SIZE> {
+impl SmallInMemoryCartridge {
     pub fn from_slice(data: &[u8]) -> Self {
         let header = get_cart_header(data);
 
-        if header.rom_size as usize > core::mem::size_of::<InMemoryCartridge<ROM_SIZE, 0>>() {
+        if header.rom_size as usize > ROM_SIZE {
             panic!("The size of this ROM is too large for this cartridge implementation!");
         }
 
-        if header.ram_size as usize > core::mem::size_of::<InMemoryCartridge<0, RAM_SIZE>>() {
-            panic!("This cartiridge does not support RAM!");
+        if header.ram_size > 0 {
+            panic!("This cartridge does not support RAM!");
         }
 
         let mut ram = Vec::new();
@@ -68,11 +70,9 @@ impl<const ROM_SIZE: usize, const RAM_SIZE: usize> InMemoryCartridge<ROM_SIZE, R
     }
 }
 
-impl<const ROM_SIZE: usize, const RAM_SIZE: usize> Cartridge
-    for InMemoryCartridge<ROM_SIZE, RAM_SIZE>
-{
+impl CartridgeData for SmallInMemoryCartridge {
     type Rom = Vec<u8, ROM_SIZE>;
-    type Ram = Vec<u8, RAM_SIZE>;
+    type Ram = Vec<u8, 0>;
 
     fn rom(&self) -> &Self::Rom {
         &self.rom
@@ -90,6 +90,3 @@ impl<const ROM_SIZE: usize, const RAM_SIZE: usize> Cartridge
         &mut self.ram
     }
 }
-
-pub type SmallInMemoryCartridge = InMemoryCartridge<0x8000, 0>;
-pub type LargeInMemoryCartridge = InMemoryCartridge<0x80000, 0x8000>;

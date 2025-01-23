@@ -1,5 +1,6 @@
 use gb_rs::{
-    gb::{GbRs, LargeInMemoryCartridge},
+    cart::{get_cart_header, CartridgeData},
+    gb::GbRs,
     joypad::{JoypadDirection, JoypadInput},
     ppu::{BKG_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH},
     tile::Tile,
@@ -43,7 +44,7 @@ pub struct App {
     counter: u32,
     halt: bool,
     exit: bool,
-    gb: GbRs<LargeInMemoryCartridge>,
+    gb: GbRs<VecCart>,
     draw_time: Duration,
     emu_time: Duration,
     tab: u8,
@@ -173,7 +174,10 @@ impl App {
                     "Total FPS: {:?}",
                     1.0 / (self.draw_time.as_secs_f64() + self.emu_time.as_secs_f64())
                 )),
-                Line::from(format!("Cartridge: {:?}", self.gb.cpu.bus.mbc.get_header())),
+                Line::from(format!(
+                    "Cartridge: {:?}",
+                    self.gb.cpu.bus.cart.get_header()
+                )),
                 Line::from(format!("LCDC: {:?}", ppu_state.lcdc)),
             ]),
             top_right,
@@ -369,7 +373,44 @@ impl Widget for OamWidget<'_> {
     }
 }
 
-fn run_tui(gb: GbRs<LargeInMemoryCartridge>) -> io::Result<()> {
+struct VecCart {
+    rom: Vec<u8>,
+    ram: Vec<u8>,
+}
+
+impl VecCart {
+    pub fn from_slice(data: &[u8]) -> Self {
+        let header = get_cart_header(data);
+
+        let rom = Vec::from(data);
+        let ram = vec![0; header.ram_size as usize];
+
+        Self { rom, ram }
+    }
+}
+
+impl CartridgeData for VecCart {
+    type Rom = Vec<u8>;
+    type Ram = Vec<u8>;
+
+    fn rom(&self) -> &Self::Rom {
+        &self.rom
+    }
+
+    fn rom_mut(&mut self) -> &mut Self::Rom {
+        &mut self.rom
+    }
+
+    fn ram(&self) -> &Self::Ram {
+        &self.ram
+    }
+
+    fn ram_mut(&mut self) -> &mut Self::Ram {
+        &mut self.ram
+    }
+}
+
+fn run_tui(gb: GbRs<VecCart>) -> io::Result<()> {
     let mut app = App {
         counter: 0,
         exit: false,
@@ -404,7 +445,7 @@ fn main() -> std::io::Result<()> {
     let rom_path = std::path::Path::new(&args.rom);
     let rom = std::fs::read(rom_path)?;
 
-    let rom: LargeInMemoryCartridge = LargeInMemoryCartridge::from_slice(&rom);
+    let rom = VecCart::from_slice(&rom);
 
     let gb = GbRs::new(rom);
 

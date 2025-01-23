@@ -1,10 +1,10 @@
 use heapless::Deque;
 use heapless::Vec;
 
+use crate::cart::Cartridge;
+use crate::cart::CartridgeData;
 use crate::interrupts::{IntSource, InterruptController};
 use crate::joypad::Joypad;
-use crate::mbc::Cartridge;
-use crate::mbc::MemoryBankController;
 use crate::ppu::PPU;
 use crate::timer::Timer;
 
@@ -20,7 +20,7 @@ struct BusStats {
     echo: u16,
 }
 
-pub struct Bus<Cart: Cartridge> {
+pub struct Bus<T: CartridgeData> {
     pub ppu: PPU,
     wram: [u8; 0x1000],
     mapped_wram: [u8; 0x1000],
@@ -31,20 +31,20 @@ pub struct Bus<Cart: Cartridge> {
     hram: [u8; 0x7F],
     passed_buf: Deque<u8, 6>,
     stats: BusStats,
-    pub mbc: MemoryBankController<Cart>,
+    pub cart: Cartridge<T>,
 }
 
-impl<Cart: Cartridge> Device for Bus<Cart> {
+impl<T: CartridgeData> Device for Bus<T> {
     fn write(&mut self, addr: u16, val: u8) {
         match addr {
             0..=0x7FFF => {
-                self.mbc.write(addr, val);
+                self.cart.write(addr, val);
             }
             0x8000..=0x9FFF => {
                 self.ppu.write(addr, val);
             }
             0xA000..=0xBFFF => {
-                self.mbc.write(addr, val);
+                self.cart.write(addr, val);
             }
             0xC000..=0xCFFF => {
                 self.wram[addr as usize - 0xC000] = val;
@@ -113,12 +113,12 @@ impl<Cart: Cartridge> Device for Bus<Cart> {
     fn read(&self, addr: u16) -> u8 {
         match addr {
             0..=0x7FFF => {
-                return self.mbc.read(addr);
+                return self.cart.read(addr);
             }
             0x8000..=0x9FFF => {
                 return self.ppu.read(addr);
             }
-            0xA000..=0xBFFF => self.mbc.read(addr),
+            0xA000..=0xBFFF => self.cart.read(addr),
             0xC000..=0xCFFF => {
                 return self.wram[addr as usize - 0xC000];
             }
@@ -169,8 +169,8 @@ impl<Cart: Cartridge> Device for Bus<Cart> {
     }
 }
 
-impl<Cart: Cartridge> Bus<Cart> {
-    pub fn new(cart: Cart) -> Self {
+impl<T: CartridgeData> Bus<T> {
+    pub fn new(cart: T) -> Self {
         Self {
             ppu: PPU::new(),
             wram: [0; 0x1000],
@@ -182,7 +182,7 @@ impl<Cart: Cartridge> Bus<Cart> {
             hram: [0; 0x7F],
             passed_buf: Deque::new(),
             stats: BusStats::default(),
-            mbc: MemoryBankController::new(cart),
+            cart: Cartridge::new(cart),
         }
     }
 
