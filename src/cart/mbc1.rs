@@ -36,7 +36,6 @@ impl MBC1 {
                     self.rom_bank_num = 1;
                 }
 
-
                 // According to pandocs:
                 // "If the ROM Bank Number is set to a higher value than the number of banks in the cart,
                 // the bank number is masked to the required number of bits.
@@ -51,17 +50,16 @@ impl MBC1 {
                 //Note: By performing the masking after the 0 -> 1 translation
                 //      above, we satisfy this section of pandocs for MBC1:
                 //
-                //      "Even with smaller ROMs that use less than 5 bits for bank selection, 
-                //      the full 5-bit register is still compared for the bank 00→01 translation logic. 
-                //      As a result if the ROM is 256 KiB or smaller, it is possible to map 
-                //      bank 0 to the 4000–7FFF region — by setting the 5th bit to 1 it will 
-                //      prevent the 00→01 translation (which looks at the full 5-bit register, and sees 
-                //      the value $10, not $00), while the bits actually used for bank selection 
+                //      "Even with smaller ROMs that use less than 5 bits for bank selection,
+                //      the full 5-bit register is still compared for the bank 00→01 translation logic.
+                //      As a result if the ROM is 256 KiB or smaller, it is possible to map
+                //      bank 0 to the 4000–7FFF region — by setting the 5th bit to 1 it will
+                //      prevent the 00→01 translation (which looks at the full 5-bit register, and sees
+                //      the value $10, not $00), while the bits actually used for bank selection
                 //      (4, in this example) are all 0, so bank $00 is selected."
                 self.rom_bank_num = self.rom_bank_num & bank_mask;
             }
             0x4000..=0x5FFF => {
-
                 let ram_size = cart.get_header().ram_size;
                 let num_rom_banks = cart.get_header().num_rom_banks;
 
@@ -70,7 +68,6 @@ impl MBC1 {
                 if num_rom_banks >= 64 || ram_size >= 32767 {
                     self.secondary_bank_reg = val & 0x3;
                 }
-
             }
             0x6000..=0x7FFF => {
                 //unimplemented!("Not implementing advanced banking mode!");
@@ -103,7 +100,6 @@ impl MBC1 {
         match addr {
             /* ROM Bank 0 */
             0x0000..=0x3FFF => {
-
                 let mut addr = addr as usize;
 
                 if self.adv_bank_mode {
@@ -121,7 +117,6 @@ impl MBC1 {
 
             /* ROM Bank X */
             0x4000..=0x7FFF => {
-
                 let mut addr = addr as usize - 0x4000;
                 addr |= (self.rom_bank_num as usize) << 14;
 
@@ -139,7 +134,6 @@ impl MBC1 {
 
             /* RAM Bank X */
             0xA000..=0xBFFF => {
-
                 if !self.ram_en {
                     // Ignore writes to disabled RAM
                     return 0xFF;

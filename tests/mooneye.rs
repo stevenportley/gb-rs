@@ -1,10 +1,10 @@
+use gb_rs::{
+    cart::{get_cart_header, CartridgeData},
+    gb::GbRs,
+};
 use std::fs::read;
 use std::path::Path;
 use std::time;
-use gb_rs::{
-    cart::{get_cart_header, CartridgeData},
-    gb::GbRs
-};
 
 struct VecCart {
     rom: Vec<u8>,
@@ -111,5 +111,3 @@ fn mbc1_4mb() {
 fn mbc1_8mb() {
     rom_test("tests/roms/mooneye/mbc1/rom_8Mb.gb");
 }
-
-
