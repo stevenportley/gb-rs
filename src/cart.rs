@@ -263,7 +263,6 @@ impl<T: CartridgeData> Cartridge<T> {
 
                 let mut mask = 1 << 20;
                 while addr > self.get_header().rom_size as usize {
-                    panic!("?");
                     addr &= !mask;
                     mask >>= 1;
                 }
