@@ -152,9 +152,7 @@ impl<T: CartridgeData> Cartridge<T> {
                             0..=0x3 => {
                                 *ram_or_rtc = RamOrRtc::BankNum(val);
                             }
-                            0x8..0xC => {
-                                *ram_or_rtc = RamOrRtc::RTC
-                            }
+                            0x8..0xC => *ram_or_rtc = RamOrRtc::RTC,
                             _ => { /* No OP */ }
                         }
                     }
@@ -169,7 +167,11 @@ impl<T: CartridgeData> Cartridge<T> {
                         *bank_mode_sel = val & 0x1 == 0x1;
                     }
                     MemoryBankController::MBC3(reg) => {
-                        let Mbc3Reg { latch_clock_data, rtc, ..} = reg;
+                        let Mbc3Reg {
+                            latch_clock_data,
+                            rtc,
+                            ..
+                        } = reg;
                         if *latch_clock_data == 0 && val == 1 {
                             *rtc += Duration::from_millis(1);
                         }
@@ -329,15 +331,14 @@ pub fn get_cart_header(rom: &[u8]) -> CartridgeHeader {
         .map(|addr| rom[addr])
         .take_while(|b| *b != 0)
         .collect();
-    let title = String::from_utf8(title).unwrap_or(String::new());//("The title is invalid UTF-8");
+    let title = String::from_utf8(title).unwrap_or(String::new()); //("The title is invalid UTF-8");
 
     let manufacturer_code = (0x13F..=0x143)
         .into_iter()
         .map(|addr| rom[addr])
         .take_while(|b| *b != 0)
         .collect();
-    let manufacturer_code =
-        String::from_utf8(manufacturer_code).unwrap_or(String::new());//expect("The manufacturer is invalid UTF-8");
+    let manufacturer_code = String::from_utf8(manufacturer_code).unwrap_or(String::new()); //expect("The manufacturer is invalid UTF-8");
 
     let rom_size = 32768 * (1 << rom[0x148]);
     let ram_size = match rom[0x149] {
