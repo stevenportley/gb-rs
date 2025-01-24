@@ -62,6 +62,9 @@ pub struct PpuState {
     pub scx: u8,
     pub scy: u8,
     pub ly: u8,
+    pub wx: u8,
+    pub wy: u8,
+    pub window_counter: u8,
     pub mode: PpuMode,
     pub lyc: u8,
     pub stat: u8,
@@ -462,6 +465,10 @@ impl PPU {
             }
 
             PpuMode::DRAW => {
+                if self.ly == self.wy {
+                    self.window_triggered = true;
+                }
+
                 // Exiting DRAW state
                 self.render_line();
 
@@ -492,9 +499,6 @@ impl PPU {
                 } else {
                     self.mode = PpuMode::OAMSCAN;
                     self.r_cyc = 20 - over_cycles;
-                    if self.ly == self.wy {
-                        self.window_triggered = true;
-                    }
 
                     // Check for LYC int
                     if (self.stat & 0x40) != 0 {
@@ -563,10 +567,13 @@ impl PPU {
             lcdc: self.get_lcdc_state(),
             scx: self.scx,
             scy: self.scy,
+            wx: self.wx,
+            wy: self.wy,
             ly: self.ly,
             lyc: self.lyc,
             mode: self.mode,
             stat: self.stat,
+            window_counter: self.window_counter,
         }
     }
 
