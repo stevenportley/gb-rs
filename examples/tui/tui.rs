@@ -49,6 +49,7 @@ pub struct App {
     gb: GbRs<VecCart>,
     draw_time: Duration,
     emu_time: Duration,
+    last_frame: Instant,
     tab: u8,
 }
 
@@ -78,6 +79,14 @@ impl App {
             self.draw_time = Instant::now() - after;
             self.handle_events()?;
             self.counter += 1;
+
+            /* Frame rate caps -> 60fps */
+            let actual_frame_time = Instant::now().duration_since(self.last_frame);
+            let min_frame_time = Duration::from_micros(16666);
+            if actual_frame_time < min_frame_time {
+                std::thread::sleep(min_frame_time - actual_frame_time);
+            }
+            self.last_frame = Instant::now();
         }
         Ok(())
     }
@@ -455,6 +464,7 @@ fn run_tui(gb: GbRs<VecCart>) -> io::Result<()> {
         halt: true,
         draw_time: Duration::from_secs(1),
         emu_time: Duration::from_secs(1),
+        last_frame: Instant::now(),
         tab: 1,
     };
 
