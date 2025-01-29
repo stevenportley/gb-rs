@@ -389,13 +389,11 @@ impl VecCart {
 
         if let Some(dir) = save_dir {
             let file = dir.to_owned() + &header.title;
-
             let ram = std::fs::read(file.clone());
 
             let ram : Vec<u8> = if ram.is_ok() {
                 ram.unwrap()
             } else {
-                panic!("Not loading game");
                 vec![0; header.ram_size as usize]
             };
 
