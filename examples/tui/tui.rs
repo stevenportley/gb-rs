@@ -6,7 +6,9 @@ use gb_rs::{
     tile::Tile,
 };
 use std::{
+    fs::OpenOptions,
     io,
+    path::Path,
     time::{Duration, Instant},
 };
 
@@ -379,16 +381,48 @@ impl Widget for OamWidget<'_> {
 struct VecCart {
     rom: Vec<u8>,
     ram: Vec<u8>,
+    save_path: Option<String>,
 }
 
 impl VecCart {
-    pub fn from_slice(data: &[u8]) -> Self {
+    pub fn from_slice(data: &[u8], save_dir: Option<&str>) -> Self {
         let header = get_cart_header(data);
 
         let rom = Vec::from(data);
-        let ram = vec![0; header.ram_size as usize];
 
-        Self { rom, ram }
+        if let Some(dir) = save_dir {
+            let file = dir.to_owned() + &header.title;
+            let ram = std::fs::read(file.clone());
+
+            let ram: Vec<u8> = if ram.is_ok() {
+                ram.unwrap()
+            } else {
+                vec![0; header.ram_size as usize]
+            };
+
+            assert_eq!(ram.len(), header.ram_size as usize);
+
+            Self {
+                rom,
+                ram,
+                save_path: Some(file),
+            }
+        } else {
+            let ram = vec![0; header.ram_size as usize];
+            Self {
+                rom,
+                ram,
+                save_path: None,
+            }
+        }
+    }
+}
+
+impl Drop for VecCart {
+    fn drop(&mut self) {
+        if let Some(file) = &self.save_path {
+            std::fs::write(file, &self.ram).expect("Unable to save game...");
+        }
     }
 }
 
@@ -448,10 +482,11 @@ fn main() -> std::io::Result<()> {
     let rom_path = std::path::Path::new(&args.rom);
     let rom = std::fs::read(rom_path)?;
 
-    let rom = VecCart::from_slice(&rom);
+    let rom = VecCart::from_slice(&rom, Some("savedgames/"));
 
     let gb = GbRs::new(rom);
 
     run_tui(gb)?;
+
     Ok(())
 }
