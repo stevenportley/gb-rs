@@ -6,7 +6,10 @@ use gb_rs::{
     tile::Tile,
 };
 use std::{
-    fs::OpenOptions, io, path::Path, time::{Duration, Instant}
+    fs::OpenOptions,
+    io,
+    path::Path,
+    time::{Duration, Instant},
 };
 
 use crossterm::{
@@ -391,7 +394,7 @@ impl VecCart {
             let file = dir.to_owned() + &header.title;
             let ram = std::fs::read(file.clone());
 
-            let ram : Vec<u8> = if ram.is_ok() {
+            let ram: Vec<u8> = if ram.is_ok() {
                 ram.unwrap()
             } else {
                 vec![0; header.ram_size as usize]
@@ -399,11 +402,18 @@ impl VecCart {
 
             assert_eq!(ram.len(), header.ram_size as usize);
 
-            Self { rom, ram, save_path: Some(file) }
-
+            Self {
+                rom,
+                ram,
+                save_path: Some(file),
+            }
         } else {
             let ram = vec![0; header.ram_size as usize];
-            Self { rom, ram, save_path: None }
+            Self {
+                rom,
+                ram,
+                save_path: None,
+            }
         }
     }
 }

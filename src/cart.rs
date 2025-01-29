@@ -282,13 +282,13 @@ impl<T: CartridgeData> Cartridge<T> {
                 let mut addr = (addr - 0xA000) as usize;
 
                 if let MemoryBankController::MBC3(regs) = &self.mbc {
-
                     match regs.ram_or_rtc {
-                        RamOrRtc::RTC => { return 0; /* TODO: RTC */ },
+                        RamOrRtc::RTC => {
+                            return 0; /* TODO: RTC */
+                        }
                         RamOrRtc::BankNum(bank) => {
                             addr |= (bank as usize) << 13;
                         }
-
                     }
                 }
 
