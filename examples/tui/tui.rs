@@ -5,7 +5,10 @@ use gb_rs::{
     ppu::{BKG_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH},
     tile::Tile,
 };
-use std::{io, time::{Duration, Instant}};
+use std::{
+    io,
+    time::{Duration, Instant},
+};
 
 use crossterm::{
     event::{
