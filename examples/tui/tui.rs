@@ -6,9 +6,7 @@ use gb_rs::{
     tile::Tile,
 };
 use std::{
-    fs::OpenOptions,
     io,
-    path::Path,
     time::{Duration, Instant},
 };
 
@@ -37,7 +35,6 @@ use clap::Parser;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    /// Name of the person to greet
     #[arg(short, long)]
     rom: String,
 }
@@ -49,6 +46,7 @@ pub struct App {
     gb: GbRs<VecCart>,
     draw_time: Duration,
     emu_time: Duration,
+    last_frame: Instant,
     tab: u8,
 }
 
@@ -68,16 +66,22 @@ impl App {
     /// runs the application's main loop until the user quits
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
         while !self.exit {
-            let before = Instant::now();
             if !self.halt {
+                let emu_before = Instant::now();
                 self.gb.run_frame();
+                self.emu_time = Instant::now().duration_since(emu_before);
             }
-            let after = Instant::now();
-            self.emu_time = after.duration_since(before);
+            let draw_before = Instant::now();
             terminal.draw(|frame| self.draw(frame))?;
-            self.draw_time = Instant::now() - after;
+            self.draw_time = Instant::now().duration_since(draw_before);
             self.handle_events()?;
             self.counter += 1;
+
+            /* Frame rate caps -> 60fps */
+            let min_frame_time = Duration::from_micros(16666);
+            /* Spin here since sleeps are not accurate */
+            while Instant::now().duration_since(self.last_frame) < min_frame_time {}
+            self.last_frame = Instant::now();
         }
         Ok(())
     }
@@ -170,15 +174,8 @@ impl App {
         frame.render_widget(
             Paragraph::new(vec![
                 Line::from(format!("{:?}", size_of_val(&self.gb))),
-                Line::from(format!("Emu FPS: {:?}", 1.0 / self.emu_time.as_secs_f64())),
-                Line::from(format!(
-                    "Draw FPS: {:?}",
-                    1.0 / self.draw_time.as_secs_f64()
-                )),
-                Line::from(format!(
-                    "Total FPS: {:?}",
-                    1.0 / (self.draw_time.as_secs_f64() + self.emu_time.as_secs_f64())
-                )),
+                Line::from(format!("Emu Time: {:?}", self.emu_time)),
+                Line::from(format!("Draw Time: {:?}", self.draw_time)),
                 Line::from(format!(
                     "Cartridge: {:?}",
                     self.gb.cpu.bus.cart.get_header()
@@ -455,6 +452,7 @@ fn run_tui(gb: GbRs<VecCart>) -> io::Result<()> {
         halt: true,
         draw_time: Duration::from_secs(1),
         emu_time: Duration::from_secs(1),
+        last_frame: Instant::now(),
         tab: 1,
     };
 
