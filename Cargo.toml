@@ -8,6 +8,8 @@ edition = "2021"
 #https://bheisler.github.io/criterion.rs/book/faq.html#cargo-bench-gives-unrecognized-option-errors-for-valid-command-line-options
 bench = false
 
+[features]
+std = []
 
 [dependencies]
 heapless = "0.8.0"
@@ -15,10 +17,13 @@ heapless = "0.8.0"
 [[example]]
 name = "tui"
 path = "examples/tui/tui.rs"
+required-features = ["std"]
+
 
 [[example]]
 name = "gui"
 path = "examples/gui/gui.rs"
+required-features = ["std"]
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }

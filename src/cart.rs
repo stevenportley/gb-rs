@@ -14,6 +14,8 @@ pub trait CartridgeData {
     fn get_header(&self) -> CartridgeHeader {
         get_cart_header(self.rom())
     }
+
+    fn save(&mut self) {}
 }
 
 #[derive(PartialEq, Default)]
