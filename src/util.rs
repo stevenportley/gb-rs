@@ -1,9 +1,9 @@
+use crate::cart::CartridgeData;
+use std::borrow::ToOwned;
 use std::println;
+use std::string::String;
 use std::vec;
 use std::vec::Vec;
-use std::borrow::ToOwned;
-use std::string::String;
-use crate::cart::CartridgeData;
 
 pub struct VecCart {
     rom: Vec<u8>,
@@ -76,6 +76,5 @@ impl CartridgeData for VecCart {
                 println!("Unable to save the game!");
             }
         }
-
     }
 }

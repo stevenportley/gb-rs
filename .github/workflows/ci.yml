@@ -53,9 +53,9 @@ jobs:
     - name: Build
       run: cargo build --verbose
     - name: Build TUI
-      run: cargo build --example tui
+      run: cargo build --example tui --features std
     - name: Build GUI
-      run: cargo build --example gui
+      run: cargo build --example gui --features std
     - name: Run tests
       run: cargo test --verbose
 

@@ -1,4 +1,4 @@
-use gb_rs::{ 
+use gb_rs::{
     gb::GbRs,
     joypad::{JoypadDirection, JoypadInput},
     ppu::{BKG_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH},
