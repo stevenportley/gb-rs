@@ -21,6 +21,13 @@ jobs:
       - uses: actions/checkout@v4
       - run: cargo check --verbose
 
+  no_std:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup target add thumbv7em-none-eabihf
+             cargo build --target thumbv7em-none-eabihf
+
   ci_matrix:
     strategy:
       matrix:
