@@ -25,8 +25,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: rustup target add thumbv7em-none-eabihf
-             cargo build --target thumbv7em-none-eabihf
+      - run:  |
+           rustup target add thumbv7em-none-eabihf
+           cargo build --target thumbv7em-none-eabihf
 
   ci_matrix:
     strategy:
