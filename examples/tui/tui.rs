@@ -1,3 +1,7 @@
+mod widget;
+
+use widget::{Background, BkWindow, GameFrame, GameWidget, SpritesWidget};
+
 use gb_rs::{
     gb::GbRs,
     joypad::{JoypadDirection, JoypadInput},
@@ -39,6 +43,14 @@ struct Args {
     rom: String,
 }
 
+enum Tab {
+    MAIN,
+    DEBUG,
+    TILES,
+    BKG,
+    WINDOW,
+}
+
 pub struct App {
     counter: u32,
     halt: bool,
@@ -48,18 +60,6 @@ pub struct App {
     emu_time: Duration,
     last_frame: Instant,
     tab: u8,
-}
-
-struct GameFrame<'a> {
-    frame: &'a gb_rs::ppu::Frame,
-}
-
-struct Background<'a> {
-    ppu: &'a gb_rs::ppu::PPU,
-}
-
-struct BkWindow<'a> {
-    ppu: &'a gb_rs::ppu::PPU,
 }
 
 impl App {
@@ -79,6 +79,7 @@ impl App {
 
             /* Frame rate caps -> 60fps */
             let min_frame_time = Duration::from_micros(16666);
+
             /* Spin here since sleeps are not accurate */
             while Instant::now().duration_since(self.last_frame) < min_frame_time {}
             self.last_frame = Instant::now();
@@ -91,8 +92,7 @@ impl App {
             Layout::horizontal([Constraint::Length(SCREEN_WIDTH as u16), Constraint::Fill(1)]);
         let [left, right] = horizontal.areas(frame.area());
 
-        let sub_vert = Layout::vertical(Constraint::from_percentages([20, 80]));
-        let [top_right, bottom_right] = sub_vert.areas(right);
+        let sub_vert = Layout::vertical(Constraint::from_percentages([50, 50]));
 
         let vertical = Layout::vertical([
             Constraint::Length(SCREEN_HEIGHT as u16 / 2),
@@ -100,37 +100,20 @@ impl App {
         ]);
         let [main, bot_left] = vertical.areas(left);
 
-        frame.render_widget(
-            Block::bordered().title(format!(
-                "GB RS: Area: {:?}, Frame: {}",
-                left,
-                &self.counter.to_string()
-            )),
-            right,
-        );
+        let [top_right, bottom_right] = sub_vert.areas(right);
+        let info_border = Block::bordered().title("Emulator Info");
+        frame.render_widget(info_border.clone(), top_right);
+        let top_right = info_border.inner(top_right);
 
         if self.tab == 1 {
-            let canvas = Canvas::default()
-                //.block(Block::bordered())
-                .marker(ratatui::symbols::Marker::HalfBlock)
-                .paint(|ctx| {
-                    let game_frame = GameFrame {
-                        frame: &self.gb.cpu.bus.ppu.screen,
-                    };
-                    ctx.draw(&game_frame);
-                })
-                .x_bounds([0.0, SCREEN_WIDTH as f64])
-                .y_bounds([0.0, SCREEN_HEIGHT as f64]);
-
-            frame.render_widget(canvas, main);
+            let game_widget = GameWidget(&self.gb.cpu.bus.ppu);
+            frame.render_widget(game_widget, main);
         } else if self.tab == 2 {
             let canvas = Canvas::default()
                 //.block(Block::bordered())
                 .marker(ratatui::symbols::Marker::HalfBlock)
                 .paint(|ctx| {
-                    let bkgr = Background {
-                        ppu: &self.gb.cpu.bus.ppu,
-                    };
+                    let bkgr = Background(&self.gb.cpu.bus.ppu);
                     ctx.draw(&bkgr);
                 })
                 .x_bounds([0.0, BKG_WIDTH as f64])
@@ -142,9 +125,7 @@ impl App {
                 //.block(Block::bordered())
                 .marker(ratatui::symbols::Marker::HalfBlock)
                 .paint(|ctx| {
-                    let window = BkWindow {
-                        ppu: &self.gb.cpu.bus.ppu,
-                    };
+                    let window = BkWindow(&self.gb.cpu.bus.ppu);
                     ctx.draw(&window);
                 })
                 .x_bounds([0.0, BKG_WIDTH as f64])
@@ -171,21 +152,30 @@ impl App {
             bot_left,
         );
 
+        let fps = |d: Duration| 1.0 / d.as_secs_f64();
+
         frame.render_widget(
             Paragraph::new(vec![
-                Line::from(format!("{:?}", size_of_val(&self.gb))),
-                Line::from(format!("Emu Time: {:?}", self.emu_time)),
-                Line::from(format!("Draw Time: {:?}", self.draw_time)),
+                Line::from(format!("GbRs Size: {:?}", size_of_val(&self.gb))),
                 Line::from(format!(
-                    "Cartridge: {:?}",
-                    self.gb.cpu.bus.cart.get_header()
+                    "Emu Time: {}us ({:.1} fps)",
+                    self.emu_time.as_micros(),
+                    fps(self.emu_time)
                 )),
-                Line::from(format!("LCDC: {:?}", ppu_state.lcdc)),
+                Line::from(format!(
+                    "Draw Time: {}us ({:.1} fps)",
+                    self.draw_time.as_micros(),
+                    fps(self.draw_time)
+                )),
+                Line::from(format!(
+                    "Game Title: {:?}",
+                    self.gb.cpu.bus.cart.get_header().title
+                )),
             ]),
             top_right,
         );
 
-        frame.render_widget(OamWidget::new(&self.gb.cpu.bus.ppu), bottom_right);
+        frame.render_widget(SpritesWidget(&self.gb.cpu.bus.ppu), bottom_right);
     }
 
     fn handle_events(&mut self) -> io::Result<()> {
@@ -241,137 +231,6 @@ impl App {
             _ => {}
         };
         Ok(())
-    }
-}
-
-fn to_color(color: u8) -> Color {
-    match color {
-        0 => Color::White,
-        1 => Color::Gray,
-        2 => Color::DarkGray,
-        3 => Color::Black,
-        _ => Color::Blue,
-    }
-}
-
-impl<'a> Shape for GameFrame<'a> {
-    fn draw(&self, painter: &mut Painter<'_, '_>) {
-        for y in 0..SCREEN_HEIGHT {
-            for x in 0..SCREEN_WIDTH {
-                let color = to_color(self.frame.buf[SCREEN_HEIGHT - y - 1][x]);
-                if let Some((x, y)) = painter.get_point(x as f64, y as f64) {
-                    painter.paint(x, y, color);
-                }
-            }
-        }
-    }
-}
-
-impl<'a> Shape for Background<'a> {
-    fn draw(&self, painter: &mut Painter<'_, '_>) {
-        let bkgr = self.ppu.render_bg();
-        for y in 0..BKG_WIDTH {
-            for x in 0..BKG_WIDTH {
-                let color = to_color(bkgr[BKG_WIDTH - y - 1][x]);
-                if let Some((x, y)) = painter.get_point(x as f64, y as f64) {
-                    painter.paint(x, y, color);
-                }
-            }
-        }
-    }
-}
-
-impl<'a> Shape for BkWindow<'a> {
-    fn draw(&self, painter: &mut Painter<'_, '_>) {
-        let bkgr = self.ppu.render_window();
-        for y in 0..BKG_WIDTH {
-            for x in 0..BKG_WIDTH {
-                let color = to_color(bkgr[BKG_WIDTH - y - 1][x]);
-                if let Some((x, y)) = painter.get_point(x as f64, y as f64) {
-                    painter.paint(x, y, color);
-                }
-            }
-        }
-    }
-}
-
-struct OamWidget<'a> {
-    ppu: &'a gb_rs::ppu::PPU,
-}
-
-struct TileShape<'a> {
-    tile: Tile<'a>,
-}
-
-impl<'a> OamWidget<'a> {
-    fn new(ppu: &'a gb_rs::ppu::PPU) -> Self {
-        Self { ppu }
-    }
-}
-
-impl Shape for TileShape<'_> {
-    fn draw(&self, painter: &mut Painter<'_, '_>) {
-        let oam_tile = self.tile.render();
-        for y in 0..8 {
-            for x in 0..8 {
-                if let Some((x2, y2)) = painter.get_point(x as f64, y as f64) {
-                    painter.paint(x2, y2, to_color(oam_tile[7 - y][x]));
-                }
-            }
-        }
-    }
-}
-
-impl Widget for OamWidget<'_> {
-    fn render(self, area: Rect, buf: &mut Buffer) {
-        const GRID_LEN: usize = 5;
-        const TILE_LEN: u16 = 8;
-
-        let sprite_map = self.ppu.get_sprite_map();
-        let oams = sprite_map.get_oams_screen();
-
-        let outer_block = Block::bordered().title(format!("Sprites ({})", oams.len()));
-        let inner = outer_block.inner(area);
-
-        let grid = {
-            let mut grid = Vec::new();
-
-            let vert = Layout::vertical(Constraint::from_lengths([TILE_LEN / 2; GRID_LEN]))
-                .flex(ratatui::layout::Flex::SpaceAround);
-            let slots: [Rect; GRID_LEN] = vert.areas(inner);
-
-            let horiz = Layout::horizontal(Constraint::from_lengths([TILE_LEN; GRID_LEN]))
-                .flex(ratatui::layout::Flex::SpaceAround);
-
-            for slot in slots {
-                let grid_slots = horiz.split(slot);
-                for grid_slot in grid_slots.iter() {
-                    grid.push(grid_slot.clone());
-                }
-            }
-
-            grid
-        };
-
-        let mut oam_iter = oams.iter();
-
-        for slot in grid {
-            if let Some(data) = oam_iter.next() {
-                let canvas = Canvas::default()
-                    .marker(ratatui::symbols::Marker::HalfBlock)
-                    //.block(Block::bordered())
-                    .paint(|ctx| {
-                        let tile = self.ppu.get_sprite_tile(data.tile_idx().into());
-                        ctx.draw(&TileShape { tile });
-                    })
-                    .x_bounds([0.0, 8.0])
-                    .y_bounds([0.0, 8.0]);
-
-                canvas.render(slot, buf);
-            }
-        }
-
-        outer_block.render(area, buf);
     }
 }
 
