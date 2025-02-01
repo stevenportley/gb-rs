@@ -1,6 +1,6 @@
 mod widget;
 
-use widget::{Background, BkWindow, GameFrame, SpritesWidget, GameWidget};
+use widget::{Background, BkWindow, GameFrame, GameWidget, SpritesWidget};
 
 use gb_rs::{
     gb::GbRs,
@@ -152,14 +152,25 @@ impl App {
             bot_left,
         );
 
-        let fps = |d: Duration| { 1.0 / d.as_secs_f64() };
+        let fps = |d: Duration| 1.0 / d.as_secs_f64();
 
         frame.render_widget(
             Paragraph::new(vec![
                 Line::from(format!("GbRs Size: {:?}", size_of_val(&self.gb))),
-                Line::from(format!("Emu Time: {}us ({:.1} fps)", self.emu_time.as_micros(), fps(self.emu_time))),
-                Line::from(format!("Draw Time: {}us ({:.1} fps)", self.draw_time.as_micros(), fps(self.draw_time))),
-                Line::from(format!("Game Title: {:?}", self.gb.cpu.bus.cart.get_header().title)),
+                Line::from(format!(
+                    "Emu Time: {}us ({:.1} fps)",
+                    self.emu_time.as_micros(),
+                    fps(self.emu_time)
+                )),
+                Line::from(format!(
+                    "Draw Time: {}us ({:.1} fps)",
+                    self.draw_time.as_micros(),
+                    fps(self.draw_time)
+                )),
+                Line::from(format!(
+                    "Game Title: {:?}",
+                    self.gb.cpu.bus.cart.get_header().title
+                )),
             ]),
             top_right,
         );
