@@ -126,7 +126,7 @@ impl<'a> OamMap<'a> {
         oams
     }
 
-    pub fn get_oams_screen(&self) -> Vec<&OamEntry, 20> {
+    pub fn get_oams_screen(&self) -> Vec<&OamEntry, 40> {
         let mut oams = Vec::new();
 
         for oam_entry in &self.oam_entries {
