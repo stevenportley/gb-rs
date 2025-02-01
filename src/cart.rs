@@ -1,15 +1,10 @@
-use core::ops::DerefMut;
 use core::time::Duration;
 use heapless::String;
 
 pub trait CartridgeData {
-    type Rom: DerefMut<Target = [u8]> + ?Sized;
-    type Ram: DerefMut<Target = [u8]> + ?Sized;
-
-    fn rom(&self) -> &Self::Rom;
-    fn rom_mut(&mut self) -> &mut Self::Rom;
-    fn ram(&self) -> &Self::Ram;
-    fn ram_mut(&mut self) -> &mut Self::Ram;
+    fn rom(&self) -> &[u8];
+    fn ram(&self) -> &[u8];
+    fn ram_mut(&mut self) -> &mut [u8];
 
     fn get_header(&self) -> CartridgeHeader {
         get_cart_header(self.rom())

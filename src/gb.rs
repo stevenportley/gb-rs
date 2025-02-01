@@ -71,22 +71,15 @@ impl SmallInMemoryCartridge {
 }
 
 impl CartridgeData for SmallInMemoryCartridge {
-    type Rom = Vec<u8, ROM_SIZE>;
-    type Ram = Vec<u8, 0>;
-
-    fn rom(&self) -> &Self::Rom {
+    fn rom(&self) -> &[u8] {
         &self.rom
     }
 
-    fn rom_mut(&mut self) -> &mut Self::Rom {
-        &mut self.rom
-    }
-
-    fn ram(&self) -> &Self::Ram {
+    fn ram(&self) -> &[u8] {
         &self.ram
     }
 
-    fn ram_mut(&mut self) -> &mut Self::Ram {
+    fn ram_mut(&mut self) -> &mut [u8] {
         &mut self.ram
     }
 }

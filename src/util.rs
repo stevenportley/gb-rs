@@ -51,22 +51,15 @@ impl Drop for VecCart {
 }
 
 impl CartridgeData for VecCart {
-    type Rom = Vec<u8>;
-    type Ram = Vec<u8>;
-
-    fn rom(&self) -> &Self::Rom {
+    fn rom(&self) -> &[u8] {
         &self.rom
     }
 
-    fn rom_mut(&mut self) -> &mut Self::Rom {
-        &mut self.rom
-    }
-
-    fn ram(&self) -> &Self::Ram {
+    fn ram(&self) -> &[u8] {
         &self.ram
     }
 
-    fn ram_mut(&mut self) -> &mut Self::Ram {
+    fn ram_mut(&mut self) -> &mut [u8] {
         &mut self.ram
     }
 
