@@ -1,52 +1,16 @@
 use gb_rs::{
     cart::{get_cart_header, CartridgeData},
     gb::GbRs,
+    util::VecCart,
 };
 use std::fs::read;
 use std::path::Path;
 use std::time;
 
-struct VecCart {
-    rom: Vec<u8>,
-    ram: Vec<u8>,
-}
-
-impl VecCart {
-    pub fn from_slice(data: &[u8]) -> Self {
-        let header = get_cart_header(data);
-
-        let rom = Vec::from(data);
-        let ram = vec![0; header.ram_size as usize];
-
-        Self { rom, ram }
-    }
-}
-
-impl CartridgeData for VecCart {
-    type Rom = Vec<u8>;
-    type Ram = Vec<u8>;
-
-    fn rom(&self) -> &Self::Rom {
-        &self.rom
-    }
-
-    fn rom_mut(&mut self) -> &mut Self::Rom {
-        &mut self.rom
-    }
-
-    fn ram(&self) -> &Self::Ram {
-        &self.ram
-    }
-
-    fn ram_mut(&mut self) -> &mut Self::Ram {
-        &mut self.ram
-    }
-}
-
 fn rom_test(rom_path: &str) {
     let rom_path = Path::new(rom_path);
     let rom = read(rom_path).expect(format!("Unable to load test rom: {:?}", rom_path).as_str());
-    let cartridge = VecCart::from_slice(rom.as_slice());
+    let cartridge = VecCart::from_slice(rom.as_slice(), None);
 
     let mut gb = GbRs::new(cartridge);
 
