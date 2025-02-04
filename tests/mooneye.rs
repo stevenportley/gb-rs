@@ -1,7 +1,7 @@
 use gb_rs::{
     cart::{get_cart_header, CartridgeData},
     gb::GbRs,
-    util::VecCart
+    util::VecCart,
 };
 use std::fs::read;
 use std::path::Path;
