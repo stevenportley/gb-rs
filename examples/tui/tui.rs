@@ -24,10 +24,7 @@ use crossterm::{
 use ratatui::{
     layout::{Constraint, Layout},
     text::Line,
-    widgets::{
-        canvas::Canvas,
-        Block, Paragraph,
-    },
+    widgets::{canvas::Canvas, Block, Paragraph},
     DefaultTerminal, Frame,
 };
 
@@ -87,8 +84,10 @@ impl App {
     }
 
     fn draw(&mut self, frame: &mut Frame) {
-        let horizontal =
-            Layout::horizontal([Constraint::Length((SCREEN_WIDTH + 1) as u16), Constraint::Fill(1)]);
+        let horizontal = Layout::horizontal([
+            Constraint::Length((SCREEN_WIDTH + 1) as u16),
+            Constraint::Fill(1),
+        ]);
         let [left, right] = horizontal.areas(frame.area());
 
         let sub_vert = Layout::vertical(Constraint::from_percentages([50, 50]));
