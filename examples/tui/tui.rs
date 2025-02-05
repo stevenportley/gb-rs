@@ -1,12 +1,11 @@
 mod widget;
 
-use widget::{Background, BkWindow, GameFrame, GameWidget, SpritesWidget};
+use widget::{Background, BkWindow, GameWidget, SpritesWidget};
 
 use gb_rs::{
     gb::GbRs,
     joypad::{JoypadDirection, JoypadInput},
     ppu::{BKG_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH},
-    tile::Tile,
     util::VecCart,
 };
 use std::{
@@ -23,13 +22,11 @@ use crossterm::{
 };
 
 use ratatui::{
-    buffer::Buffer,
-    layout::{Constraint, Layout, Rect},
-    style::Color,
+    layout::{Constraint, Layout},
     text::Line,
     widgets::{
-        canvas::{Canvas, Painter, Shape},
-        Block, Paragraph, Widget,
+        canvas::Canvas,
+        Block, Paragraph,
     },
     DefaultTerminal, Frame,
 };
@@ -43,6 +40,7 @@ struct Args {
     rom: String,
 }
 
+/*
 enum Tab {
     MAIN,
     DEBUG,
@@ -50,6 +48,7 @@ enum Tab {
     BKG,
     WINDOW,
 }
+*/
 
 pub struct App {
     counter: u32,
@@ -89,13 +88,13 @@ impl App {
 
     fn draw(&mut self, frame: &mut Frame) {
         let horizontal =
-            Layout::horizontal([Constraint::Length(SCREEN_WIDTH as u16), Constraint::Fill(1)]);
+            Layout::horizontal([Constraint::Length((SCREEN_WIDTH + 1) as u16), Constraint::Fill(1)]);
         let [left, right] = horizontal.areas(frame.area());
 
         let sub_vert = Layout::vertical(Constraint::from_percentages([50, 50]));
 
         let vertical = Layout::vertical([
-            Constraint::Length(SCREEN_HEIGHT as u16 / 2),
+            Constraint::Length((SCREEN_HEIGHT as u16 / 2) + 1),
             Constraint::Fill(1),
         ]);
         let [main, bot_left] = vertical.areas(left);
@@ -110,7 +109,6 @@ impl App {
             frame.render_widget(game_widget, main);
         } else if self.tab == 2 {
             let canvas = Canvas::default()
-                //.block(Block::bordered())
                 .marker(ratatui::symbols::Marker::HalfBlock)
                 .paint(|ctx| {
                     let bkgr = Background(&self.gb.cpu.bus.ppu);
@@ -122,7 +120,6 @@ impl App {
             frame.render_widget(canvas, main);
         } else {
             let canvas = Canvas::default()
-                //.block(Block::bordered())
                 .marker(ratatui::symbols::Marker::HalfBlock)
                 .paint(|ctx| {
                     let window = BkWindow(&self.gb.cpu.bus.ppu);
@@ -179,7 +176,7 @@ impl App {
     }
 
     fn handle_events(&mut self) -> io::Result<()> {
-        if !event::poll(std::time::Duration::from_micros(10))? {
+        if !event::poll(Duration::from_micros(0))? {
             return Ok(());
         }
         match event::read()? {
