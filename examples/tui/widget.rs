@@ -1,6 +1,5 @@
 use gb_rs::{
-    gb::GbRs,
-    ppu::{Frame, BKG_WIDTH, PPU, SCREEN_HEIGHT, SCREEN_WIDTH},
+    ppu::{BKG_WIDTH, PPU, SCREEN_HEIGHT, SCREEN_WIDTH},
     tile::Tile,
 };
 
