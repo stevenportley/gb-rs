@@ -165,9 +165,7 @@ impl App {
                     self.draw_time.as_micros(),
                     fps(self.draw_time)
                 )),
-                Line::from(format!(
-                    "Frame counter: {}", self.frame_counter
-                )),
+                Line::from(format!("Frame counter: {}", self.frame_counter)),
                 Line::from(format!(
                     "Game Title: {:?}",
                     self.gb.cpu.bus.cart.get_header().title

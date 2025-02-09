@@ -31,8 +31,8 @@ pub fn ppu_stress_benchmark(c: &mut Criterion) {
     });
 }
 
-criterion_group!{
-    name = benches;
-    config = Criterion::default().significance_level(0.1).sample_size(1000);
-    targets = acid2_benchmark, ppu_stress_benchmark}
+criterion_group! {
+name = benches;
+config = Criterion::default().significance_level(0.1).sample_size(1000);
+targets = acid2_benchmark, ppu_stress_benchmark}
 criterion_main!(benches);
