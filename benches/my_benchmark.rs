@@ -24,7 +24,7 @@ pub fn ppu_stress_benchmark(c: &mut Criterion) {
 
     c.bench_function("vectdemo_frames", |b| {
         b.iter(|| {
-            for _ in 0..100 {
+            for _ in 0..10000 {
                 gb.run_frame();
             }
         })
