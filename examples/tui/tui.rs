@@ -55,6 +55,7 @@ pub struct App {
     draw_time: Duration,
     emu_time: Duration,
     last_frame: Instant,
+    frame_counter: u32,
     tab: u8,
 }
 
@@ -65,6 +66,7 @@ impl App {
             if !self.halt {
                 let emu_before = Instant::now();
                 self.gb.run_frame();
+                self.frame_counter += 1;
                 self.emu_time = Instant::now().duration_since(emu_before);
             }
             let draw_before = Instant::now();
@@ -164,6 +166,9 @@ impl App {
                     fps(self.draw_time)
                 )),
                 Line::from(format!(
+                    "Frame counter: {}", self.frame_counter
+                )),
+                Line::from(format!(
                     "Game Title: {:?}",
                     self.gb.cpu.bus.cart.get_header().title
                 )),
@@ -207,6 +212,7 @@ impl App {
                         if key_event.kind == KeyEventKind::Press {
                             self.halt = true;
                             self.gb.run_frame();
+                            self.frame_counter += 1;
                         }
                     }
                     KeyCode::Char('n') => {
@@ -235,6 +241,7 @@ fn run_tui(gb: GbRs<VecCart>) -> io::Result<()> {
         counter: 0,
         exit: false,
         gb,
+        frame_counter: 0,
         halt: true,
         draw_time: Duration::from_secs(1),
         emu_time: Duration::from_secs(1),
