@@ -121,6 +121,7 @@ pub enum Instruction2 {
 }
 */
 
+
 #[derive(Debug, PartialEq)]
 enum Opcode {
     NOP,
@@ -179,9 +180,357 @@ pub struct Instr {
 }
 
 impl<T: CartridgeData> Cpu<T> {
+
+    fn no_op(_cpu: &mut Self, _opcode: u8) -> u8 {
+        1
+    }
+
+    fn ld_r16_imm16(cpu: &mut Self, opcode: u8) -> u8 {
+        let r16 = (opcode >> 4) & 0x3;
+        let imm16 = cpu.load_word();
+        cpu.wreg16(r16, imm16);
+        3
+    }
+
+    fn ld_r16mem_a(cpu: &mut Self, opcode: u8) -> u8 {
+        let r16 = (opcode >> 4) & 0x3;
+        cpu.wr16mem(r16, cpu.a);
+        2
+    }
+
+    fn inc_r16(cpu: &mut Self, opcode: u8) -> u8 {
+        let r16 = (opcode >> 4) & 0x3;
+        let plus_one = cpu.rreg16(r16).wrapping_add(1);
+        cpu.wreg16(r16, plus_one);
+        2
+    }
+
+    fn inc_r8(cpu: &mut Self, opcode: u8) -> u8 {
+        let r8 = (opcode >> 3) & 0x7;
+        let before = cpu.rreg8(r8);
+        cpu.h_f = does_bit3_overflow(before, 1);
+        cpu.n_f = false;
+        let incre = before.wrapping_add(1);
+        cpu.z_f = incre == 0;
+        cpu.wreg8(r8, incre);
+
+        return if r8 == HL_PTR { 3 } else { 1 };
+    }
+
+    fn dec_r8(cpu: &mut Self, opcode: u8) -> u8 {
+        let r8 = (opcode >> 3) & 0x7;
+        let before = cpu.rreg8(r8);
+        let dec = before.wrapping_sub(1);
+        cpu.wreg8(r8, dec);
+
+        cpu.z_f = dec == 0;
+        cpu.h_f = does_bit3_borrow(before, 1);
+        cpu.n_f = true;
+
+        return if r8 == HL_PTR { 3 } else { 1 };
+    }
+
+    fn ld_r8_imm8(cpu: &mut Self, opcode: u8) -> u8 {
+        let r8 = (opcode >> 3) & 0x7;
+        let imm8 = cpu.load_byte();
+        cpu.wreg8(r8, imm8);
+        return if r8 == HL_PTR { 3 } else { 2 };
+    }
+
+    fn rlca(cpu: &mut Self, _opcode: u8) -> u8 {
+        cpu.rlc(A_REG);
+        cpu.z_f = false;
+        1
+    }
+
+    fn ld_imm16_sp(cpu: &mut Self, _opcode: u8) -> u8 {
+
+        let imm16 = cpu.load_word();
+
+        // This is why: https://rgbds.gbdev.io/docs/v0.8.0/gbz80.7#LD__n16_,SP
+        cpu.bus.write(imm16, cpu.sp as u8);
+        cpu.bus.write(imm16 + 1, (cpu.sp >> 8) as u8);
+        5
+    }
+
+    fn add_hl_r16(cpu: &mut Self, opcode: u8) -> u8 {
+
+        let r16 = (opcode >> 4) & 0x3;
+        let hl_val = cpu.rreg16(HL_REG);
+        let reg_val = cpu.rreg16(r16);
+        let (new_val, overflow) = hl_val.overflowing_add(reg_val);
+        cpu.wreg16(HL_REG, new_val);
+        cpu.n_f = false;
+        cpu.h_f = does_bit11_overflow(hl_val, reg_val);
+        cpu.c_f = overflow;
+        2
+    }
+
+    fn ld_a_r16mem(cpu: &mut Self, opcode: u8) -> u8 {
+        let r16mem = (opcode >> 4) & 0x3;
+        cpu.a = cpu.rr16mem(r16mem);
+        2
+    }
+
+    fn dec_r16(cpu: &mut Self, opcode: u8) -> u8 {
+        let r16 = (opcode >> 4) & 0x3;
+        let minus_one = cpu.rreg16(r16).wrapping_sub(1);
+        cpu.wreg16(r16, minus_one);
+        2
+    }
+
+    fn rrca(cpu: &mut Self, _opcode: u8) -> u8 {
+        cpu.rrc(A_REG);
+        cpu.z_f = false;
+        1
+    }
+
+    fn stop(_cpu: &mut Self, _opcode: u8) -> u8 {
+        todo!("Stop instruction not implemented!");
+    }
+
+    fn rla(cpu: &mut Self, _opcode: u8) -> u8 {
+        cpu.rl(A_REG);
+        cpu.z_f = false;
+        1
+    }
+
+    fn jr_imm8(cpu: &mut Self, _opcode: u8) -> u8 {
+        let offset = cpu.load_byte() as i8;
+        let curr_pc = cpu.pc as i32;
+        let new_pc = curr_pc + offset as i32;
+        cpu.pc = new_pc as u16;
+        return 3;
+    }
+
+    fn rra(cpu: &mut Self, _opcode: u8) -> u8 {
+        cpu.rr(A_REG);
+        cpu.z_f = false;
+        1
+    }
+
+    fn jr_cond_imm8(cpu: &mut Self, opcode: u8) -> u8 {
+        let cond = (opcode >> 3) & 0x3;
+        let imm8 = cpu.load_byte();
+        if cpu.check_cond(cond) {
+            let offset = imm8 as i8;
+            let curr_pc = cpu.pc as i32;
+            let new_pc = curr_pc + offset as i32;
+
+            cpu.pc = new_pc as u16;
+            return 3;
+        }
+        return 2;
+    }
+
+    fn daa(cpu: &mut Self, opcode: u8) -> u8 {
+        //https://forums.nesdev.org/viewtopic.php?t=15944
+        if cpu.n_f {
+            if cpu.c_f {
+                cpu.a = cpu.a.wrapping_sub(0x60);
+            }
+            if cpu.h_f {
+                cpu.a = cpu.a.wrapping_sub(0x6);
+            }
+        } else {
+            if cpu.c_f || cpu.a > 0x99 {
+                cpu.a = cpu.a.wrapping_add(0x60);
+                cpu.c_f = true;
+            }
+            if cpu.h_f || (cpu.a & 0x0f) > 0x09 {
+                cpu.a = cpu.a.wrapping_add(0x6);
+            }
+        }
+
+        cpu.z_f = cpu.a == 0;
+        cpu.h_f = false;
+        1
+    }
+
+    fn cpl(cpu: &mut Self, _opcode: u8) -> u8 {
+        cpu.a = !cpu.a;
+        cpu.n_f = true;
+        cpu.h_f = true;
+        1
+    }
+
+    fn scf(cpu: &mut Self, _opcode: u8) -> u8 {
+        cpu.n_f = false;
+        cpu.h_f = false;
+        cpu.c_f = true;
+        1
+    }
+
+    fn ccf(cpu: &mut Self, _opcode: u8) -> u8 {
+        cpu.n_f = false;
+        cpu.h_f = false;
+        cpu.c_f = !cpu.c_f;
+        return 1;
+    }
+
+    fn ld_r8_r8(cpu: &mut Self, opcode: u8) -> u8 {
+        let src = opcode & 0x7;
+        let dst = (opcode >> 3) & 0x7;
+        let d = cpu.rreg8(src);
+        cpu.wreg8(dst, d);
+        return if (dst == HL_PTR) || (src == HL_PTR) {
+            2
+        } else {
+            1
+        };
+
+    }
+
+    fn halt(cpu: &mut Self, _opcode: u8) -> u8 {
+        if cpu.ime {
+            cpu.sleep = true;
+            return 1;
+        }
+
+        if !cpu.bus.interrupt_pending() {
+            cpu.sleep = true;
+            return 1;
+        }
+
+        //TODO: Handle HALT bug
+        //assert!(false);
+        return 1;
+
+    }
+
+    const INSTR_HANDLERS : [fn(&mut Self, u8) -> u8; 128] = [
+        Self::no_op, // 0x00
+        Self::ld_r16_imm16, // 0x01
+        Self::ld_r16mem_a, // 0x02
+        Self::inc_r16, //0x03
+        Self::inc_r8, //0x04
+        Self::dec_r8, //0x05
+        Self::ld_r8_imm8, //0x06
+        Self::rlca, //0x07
+        Self::ld_imm16_sp, //0x08
+        Self::add_hl_r16, //0x09
+        Self::ld_a_r16mem, //0x0A
+        Self::dec_r16, //0x0B
+        Self::inc_r8, //0x0C
+        Self::dec_r8, //0x0D
+        Self::ld_r8_imm8, //0x0E
+        Self::rrca, //0x0F
+        Self::stop, //0x10
+        Self::ld_r16_imm16, //0x11
+        Self::ld_r16mem_a, //0x12
+        Self::inc_r16, //0x13
+        Self::inc_r8, //0x14
+        Self::dec_r8, //0x15
+        Self::ld_r8_imm8, //0x16
+        Self::rla, //0x17
+        Self::jr_imm8, //0x18
+        Self::add_hl_r16, //0x19
+        Self::ld_a_r16mem, //0x1A
+        Self::dec_r16, //0x1B
+        Self::inc_r8, //0x1C
+        Self::dec_r8, //0x1D
+        Self::ld_r8_imm8, //0x1E
+        Self::rra, //0x1F
+        Self::jr_cond_imm8, //0x20
+        Self::ld_r16_imm16, //0x21
+        Self::ld_r16mem_a, //0x22
+        Self::inc_r16, //0x23
+        Self::inc_r8, //0x24
+        Self::dec_r8, //0x25
+        Self::ld_r8_imm8, //0x26
+        Self::daa, //0x27
+        Self::jr_cond_imm8, //0x28
+        Self::add_hl_r16, //0x29
+        Self::ld_a_r16mem, //0x2A
+        Self::dec_r16, //0x2B
+        Self::inc_r8, //0x2C
+        Self::dec_r8, //0x2D
+        Self::ld_r8_imm8, //0x2E
+        Self::cpl, //0x2F
+        Self::jr_cond_imm8, //0x30
+        Self::ld_r16_imm16, //0x31
+        Self::ld_r16mem_a, //0x32
+        Self::inc_r16, //0x33
+        Self::inc_r8, //0x34
+        Self::dec_r8, //0x35
+        Self::ld_r8_imm8, //0x36
+        Self::scf, //0x37
+        Self::jr_cond_imm8, //0x38
+        Self::add_hl_r16, //0x39
+        Self::ld_a_r16mem, //0x3A
+        Self::dec_r16, //0x3B
+        Self::inc_r8, //0x3C
+        Self::dec_r8, //0x3D
+        Self::ld_r8_imm8, //0x3E
+        Self::ccf, //0x3F
+        Self::ld_r8_r8, //0x40 ...
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::halt,  //0x76
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, 
+        Self::ld_r8_r8, //0x7F
+    ];
+
     //TODO: Add an API to build the CPU in a state that
     //      does not skip the boot rom
-
     pub fn new(bus: Bus<T>) -> Self {
         Cpu {
             a: 0x01,
@@ -1950,8 +2299,15 @@ impl<T: CartridgeData> Cpu<T> {
             }
         }
 
-        let next_instr = self.next_instr();
-        let cycles = self.execute_instr(next_instr);
+        let opcode = self.bus.read(self.pc);
+        let cycles = if opcode < 128 {
+            self.pc += 1;
+            Self::INSTR_HANDLERS[opcode as usize](self, opcode).into()
+        } else {
+            let next_instr = self.next_instr();
+            let cycles = self.execute_instr(next_instr);
+            cycles
+        };
         self.bus.run_cycles(cycles as u16);
         cycles
     }
