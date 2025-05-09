@@ -49,28 +49,10 @@ pub struct Cpu<T: CartridgeData> {
     pub bus: Bus<T>,
 }
 
-#[derive(Debug)]
-enum Operands {
-    A,  // The accumulator
-    SP, // The stadck pointer
-    HL, // HL register
-    R8(u8),
-    R16(u8),
-    R16Stk(u8),
-    R16Mem(u8),
-    Cond(u8), // TODO(SP): Figure out what this is. https://gbdev.io/pandocs/CPU_Instruction_Set.html#cb-prefix-instructions
-    B3(u8),   // TODO(SP): Figure out what this is.
-    Tgt3(u8), //TODO(SP): Figure out what this is.
-    Imm8(u8),
-    Imm16(u16), //TODO(SP): This needs to be little-endian, make sure to test this
-    SpImm8(u8), // This is SP + Imm8
-}
-
 const PAGE0_OFFSET: u16 = 0xFF00;
 
 // Bit indices to address particular register
 const A_REG: u8 = 7;
-const C_REG: u8 = 1;
 const HL_REG: u8 = 2;
 
 const HL_PTR: u8 = 6;
@@ -124,64 +106,6 @@ pub enum Instruction2 {
     Undefined(u8),                     // For undefined opcodes
 }
 */
-
-
-#[derive(Debug, PartialEq)]
-enum Opcode {
-    NOP,
-    LD,
-    INC,
-    DEC,
-    ADD,
-    RLCA,
-    RRCA,
-    RLA,
-    RRA,
-    DAA,
-    CPL,
-    SCF,
-    CCF,
-
-    JR,
-    STOP,
-    HALT,
-    ADC,
-    SUB,
-    SBC,
-    AND,
-    XOR,
-    OR,
-    CP,
-    RET,
-    RETI,
-    JP,
-    CALL,
-    RST,
-    POP,
-    PUSH,
-    LDH,
-    DI,
-    EI,
-    //0xCB instructions
-    RLC,
-    RRC,
-    RL,
-    RR,
-    SLA,
-    SRA,
-    SWAP,
-    SRL,
-    BIT,
-    RES,
-    SET,
-}
-
-#[derive(Debug)]
-pub struct Instr {
-    opcode: Opcode,
-    op1: Option<Operands>,
-    op2: Option<Operands>,
-}
 
 impl<T: CartridgeData> Cpu<T> {
 
@@ -327,7 +251,7 @@ impl<T: CartridgeData> Cpu<T> {
         return 2;
     }
 
-    fn daa(cpu: &mut Self, opcode: u8) -> u8 {
+    fn daa(cpu: &mut Self, _opcode: u8) -> u8 {
         //https://forums.nesdev.org/viewtopic.php?t=15944
         if cpu.n_f {
             if cpu.c_f {
@@ -399,7 +323,6 @@ impl<T: CartridgeData> Cpu<T> {
         //TODO: Handle HALT bug
         //assert!(false);
         return 1;
-
     }
 
     fn add_a_r8(cpu: &mut Self, opcode: u8) -> u8 {
@@ -666,7 +589,7 @@ impl<T: CartridgeData> Cpu<T> {
                 cpu.c_f = (val & 0x10) == 0x10;
             }
             _ => {
-                panic!("Cannot be here");
+                unreachable!("Invalid pop_r16stk");
             }
         }
         3
@@ -689,7 +612,7 @@ impl<T: CartridgeData> Cpu<T> {
                 val
             }
             _ => {
-                panic!("Cannot be here");
+                unreachable!("Invalid push_r16stk");
             }
         };
 
@@ -808,7 +731,6 @@ impl<T: CartridgeData> Cpu<T> {
 
     fn prefix(cpu: &mut Self, _opcode: u8) -> u8 {
 
-        /*
         let next_byte = cpu.load_byte();
         let cycles = match next_byte {
             0..=0x7 => { Self::prefix_rlc(cpu, next_byte) },
@@ -825,13 +747,14 @@ impl<T: CartridgeData> Cpu<T> {
         };
 
         cycles
-        */
 
+            /*
         let next_byte = cpu.load_byte();
         let instr = Self::cb_prefix_decode(next_byte);
         let cycles = cpu.execute_instr(instr);
 
         cycles as u8
+            */
     }
 
     fn di(cpu: &mut Self, _opcode: u8) -> u8 {
@@ -894,7 +817,7 @@ impl<T: CartridgeData> Cpu<T> {
 
     fn prefix_rr(cpu: &mut Self, opcode: u8) -> u8 {
         let r = opcode & 0x7;
-        cpu.rl(r);
+        cpu.rr(r);
         return if r == HL_PTR { 4 } else { 2 };
     }
 
@@ -1299,8 +1222,7 @@ impl<T: CartridgeData> Cpu<T> {
                 return self.bus.read(hl);
             }
             7 => return self.a,
-            _ => unsafe { core::hint::unreachable_unchecked() },
-            //_ => unreachable!("rreg8 with invalid bit index! {dst}"),
+            _ => unreachable!("rreg8 with invalid bit index! {dst}"),
         }
     }
 
@@ -1320,8 +1242,7 @@ impl<T: CartridgeData> Cpu<T> {
                 self.bus.write(hl, val);
             }
             7 => self.a = val,
-            _ => unsafe { core::hint::unreachable_unchecked() },
-            //_ => unreachable!("Set reg8 with invalid bit index! {dst}"),
+            _ => unreachable!("Set reg8 with invalid bit index! {dst}"),
         }
     }
 
@@ -1346,12 +1267,9 @@ impl<T: CartridgeData> Cpu<T> {
             3 => {
                 self.sp = val;
             }
-            _ => unsafe { core::hint::unreachable_unchecked() },
-            /*
             _ => {
                 unreachable!("Set reg16 with invalid bit index! {dst}")
             }
-            */
         }
     }
 
@@ -1364,8 +1282,7 @@ impl<T: CartridgeData> Cpu<T> {
             1 => return make_u16(self.d, self.e),
             2 => return make_u16(self.h, self.l),
             3 => return self.sp,
-            _ => unsafe { core::hint::unreachable_unchecked() },
-            //_ => unreachable!("rreg16 with invalid bit index! {dst}"),
+            _ => unreachable!("rreg16 with invalid bit index! {dst}"),
         }
     }
 
@@ -1391,11 +1308,22 @@ impl<T: CartridgeData> Cpu<T> {
                 self.l = (hl & 0xFF) as u8;
                 return ret;
             }
-            _ => unsafe { core::hint::unreachable_unchecked() },
-            //_ => unreachable!("rr16mem with invalid bit index! {r16mem}"),
+            _ => unreachable!("rr16mem with invalid bit index! {r16mem}"),
         }
     }
 
+    #[inline(always)]
+    fn check_cond(&self, cond: u8) -> bool {
+        match cond {
+            0 => return !self.z_f,
+            1 => return self.z_f,
+            2 => return !self.c_f,
+            3 => return self.c_f,
+            _ => unreachable!("invalid check_cond"),
+        }
+    }
+
+    #[inline(always)]
     fn wr16mem(&mut self, r16mem: u8, val: u8) {
         let make_u16 = |h, l| -> u16 { (h as u16) << 8 | (l as u16) };
         match r16mem {
@@ -1415,11 +1343,11 @@ impl<T: CartridgeData> Cpu<T> {
                 self.h = (hl >> 8) as u8;
                 self.l = (hl & 0xFF) as u8;
             }
-            _ => unsafe { core::hint::unreachable_unchecked() },
-            //_ => unreachable!("rr16mem with invalid bit index! {r16mem}"),
+            _ => unreachable!("wr16mem with invalid bit index! {r16mem}"),
         }
     }
 
+    #[inline(always)]
     fn push_stack(&mut self, val: u16) {
         self.sp = self.sp - 1;
         self.bus.write(self.sp, (val >> 8) as u8);
@@ -1427,6 +1355,7 @@ impl<T: CartridgeData> Cpu<T> {
         self.bus.write(self.sp, (val & 0xFF) as u8);
     }
 
+    #[inline(always)]
     fn pop_stack(&mut self) -> u16 {
         let mut ret = self.bus.read(self.sp) as u16;
         self.sp = self.sp + 1;
@@ -1434,6 +1363,22 @@ impl<T: CartridgeData> Cpu<T> {
         self.sp = self.sp + 1;
         return ret;
     }
+
+    #[inline(always)]
+    fn load_byte(&mut self) -> u8 {
+        let next_byte = self.bus.read(self.pc);
+        self.pc += 1;
+        return next_byte;
+    }
+
+    #[inline(always)]
+    fn load_word(&mut self) -> u16 {
+        let next = self.load_byte();
+        let next_next = self.load_byte();
+
+        return (next as u16) | ((next_next as u16) << 8);
+    }
+
 
     fn rlc(&mut self, reg: u8) {
         let reg_val = self.rreg8(reg);
@@ -1483,262 +1428,8 @@ impl<T: CartridgeData> Cpu<T> {
         self.c_f = (reg_val & 1) == 1;
     }
 
-    fn check_cond(&self, cond: u8) -> bool {
-        match cond {
-            0 => return !self.z_f,
-            1 => return self.z_f,
-            2 => return !self.c_f,
-            3 => return self.c_f,
-            _ => unreachable!("Invalid condition check! {cond}"),
-        }
-    }
-
-    fn load_byte(&mut self) -> u8 {
-        let next_byte = self.bus.read(self.pc);
-        self.pc += 1;
-        return next_byte;
-    }
-
-    fn load_word(&mut self) -> u16 {
-        let next = self.load_byte();
-        let next_next = self.load_byte();
-
-        return (next as u16) | ((next_next as u16) << 8);
-    }
-
-    fn cb_prefix_decode(opcode: u8) -> Instr {
-        let masked = opcode >> 3;
-        let lower_three = opcode & 0x7;
-        let bit76 = opcode >> 6;
-        match masked {
-            0 => {
-                return Instr {
-                    opcode: Opcode::RLC,
-                    op1: Some(Operands::R8(lower_three)),
-                    op2: None,
-                };
-            }
-            1 => {
-                return Instr {
-                    opcode: Opcode::RRC,
-                    op1: Some(Operands::R8(lower_three)),
-                    op2: None,
-                };
-            }
-            2 => {
-                return Instr {
-                    opcode: Opcode::RL,
-                    op1: Some(Operands::R8(lower_three)),
-                    op2: None,
-                };
-            }
-            3 => {
-                return Instr {
-                    opcode: Opcode::RR,
-                    op1: Some(Operands::R8(lower_three)),
-                    op2: None,
-                };
-            }
-            4 => {
-                return Instr {
-                    opcode: Opcode::SLA,
-                    op1: Some(Operands::R8(lower_three)),
-                    op2: None,
-                };
-            }
-            5 => {
-                return Instr {
-                    opcode: Opcode::SRA,
-                    op1: Some(Operands::R8(lower_three)),
-                    op2: None,
-                };
-            }
-            6 => {
-                return Instr {
-                    opcode: Opcode::SWAP,
-                    op1: Some(Operands::R8(lower_three)),
-                    op2: None,
-                };
-            }
-            7 => {
-                return Instr {
-                    opcode: Opcode::SRL,
-                    op1: Some(Operands::R8(lower_three)),
-                    op2: None,
-                };
-            }
-            _ => {}
-        };
-
-        let bit543 = (opcode >> 3) & 0x7;
-        match bit76 {
-            1 => {
-                return Instr {
-                    opcode: Opcode::BIT,
-                    op1: Some(Operands::B3(bit543)),
-                    op2: Some(Operands::R8(lower_three)),
-                };
-            }
-            2 => {
-                return Instr {
-                    opcode: Opcode::RES,
-                    op1: Some(Operands::B3(bit543)),
-                    op2: Some(Operands::R8(lower_three)),
-                };
-            }
-            3 => {
-                return Instr {
-                    opcode: Opcode::SET,
-                    op1: Some(Operands::B3(bit543)),
-                    op2: Some(Operands::R8(lower_three)),
-                };
-            }
-            _ => {}
-        }
-
-        unreachable!("Invalid opcode: {opcode}");
-    }
-
     pub fn is_passed(&self) -> bool {
         return self.bus.is_passed();
-    }
-
-    #[inline(always)]
-    pub fn execute_instr(&mut self, instr: Instr) -> usize {
-        match instr {
-            Instr {
-                opcode: Opcode::RLC,
-                op1: Some(Operands::R8(r)),
-                op2: None,
-            } => {
-                self.rlc(r);
-                return if r == HL_PTR { 4 } else { 2 };
-            }
-            Instr {
-                opcode: Opcode::RRC,
-                op1: Some(Operands::R8(r)),
-                op2: None,
-            } => {
-                self.rrc(r);
-                return if r == HL_PTR { 4 } else { 2 };
-            }
-            Instr {
-                opcode: Opcode::RL,
-                op1: Some(Operands::R8(r)),
-                op2: None,
-            } => {
-                self.rl(r);
-                return if r == HL_PTR { 4 } else { 2 };
-            }
-            Instr {
-                opcode: Opcode::RR,
-                op1: Some(Operands::R8(r)),
-                op2: None,
-            } => {
-                self.rr(r);
-                return if r == HL_PTR { 4 } else { 2 };
-            }
-            Instr {
-                opcode: Opcode::SLA,
-                op1: Some(Operands::R8(r)),
-                op2: None,
-            } => {
-                let reg_val = self.rreg8(r);
-                let new_val = reg_val << 1;
-                self.wreg8(r, new_val);
-
-                self.c_f = (reg_val & 0x80) == 0x80;
-                self.n_f = false;
-                self.h_f = false;
-                self.z_f = new_val == 0;
-                return if r == HL_PTR { 4 } else { 2 };
-            }
-            Instr {
-                opcode: Opcode::SRA,
-                op1: Some(Operands::R8(r)),
-                op2: None,
-            } => {
-                let reg_val = self.rreg8(r);
-                let msb = reg_val & 0x80;
-                let new_val = (reg_val >> 1) | msb;
-                self.wreg8(r, new_val);
-
-                self.c_f = (reg_val & 0x1) == 0x1;
-                self.n_f = false;
-                self.h_f = false;
-                self.z_f = new_val == 0;
-                return if r == HL_PTR { 4 } else { 2 };
-            }
-            Instr {
-                opcode: Opcode::SWAP,
-                op1: Some(Operands::R8(r)),
-                op2: None,
-            } => {
-                let reg_val = self.rreg8(r);
-                let upper_nibble = reg_val >> 4;
-                let lower_nibble = reg_val & 0xF;
-                let new_val = (lower_nibble << 4) | upper_nibble;
-                self.wreg8(r, new_val);
-
-                self.z_f = new_val == 0;
-                self.n_f = false;
-                self.h_f = false;
-                self.c_f = false;
-                return if r == HL_PTR { 4 } else { 2 };
-            }
-            Instr {
-                opcode: Opcode::SRL,
-                op1: Some(Operands::R8(r)),
-                op2: None,
-            } => {
-                let reg_val = self.rreg8(r);
-                let new_val = reg_val >> 1;
-                self.wreg8(r, new_val);
-
-                self.z_f = new_val == 0;
-                self.n_f = false;
-                self.h_f = false;
-                self.c_f = (reg_val & 0x1) == 0x1;
-                return if r == HL_PTR { 4 } else { 2 };
-            }
-            Instr {
-                opcode: Opcode::BIT,
-                op1: Some(Operands::B3(b3)),
-                op2: Some(Operands::R8(r)),
-            } => {
-                let reg_val = self.rreg8(r);
-                let mask = 0x1 << b3;
-
-                self.z_f = (reg_val & mask) == 0;
-                self.n_f = false;
-                self.h_f = true;
-                return if r == HL_PTR { 3 } else { 2 };
-            }
-            Instr {
-                opcode: Opcode::RES,
-                op1: Some(Operands::B3(b3)),
-                op2: Some(Operands::R8(r)),
-            } => {
-                let reg_val = self.rreg8(r);
-                let mask = 0x1 << b3;
-                let new_val = reg_val & !mask;
-                self.wreg8(r, new_val);
-                return if r == HL_PTR { 4 } else { 2 };
-            }
-            Instr {
-                opcode: Opcode::SET,
-                op1: Some(Operands::B3(b3)),
-                op2: Some(Operands::R8(r)),
-            } => {
-                let reg_val = self.rreg8(r);
-                let mask = 0x1 << b3;
-                let new_val = reg_val | mask;
-                self.wreg8(r, new_val);
-                return if r == HL_PTR { 4 } else { 2 };
-            }
-
-            _ => unreachable!("Unhandle instruction! {:?}", instr),
-        }
     }
 
     pub fn run_one(&mut self) -> usize {
@@ -1771,16 +1462,6 @@ impl<T: CartridgeData> Cpu<T> {
         unsafe { core::arch::asm!("NOP"); }
         unsafe { core::arch::asm!("NOP"); }
         unsafe { core::arch::asm!("NOP"); }
-        /*
-        let cycles = if opcode != 0xCB {
-            Self::INSTR_HANDLERS[opcode as usize](self, opcode).into()
-        } else {
-            let next_byte = self.load_byte();
-            let next_instr = Self::cb_prefix_decode(next_byte);
-            let cycles = self.execute_instr(next_instr);
-            cycles
-        };
-        */
 
         self.bus.run_cycles(cycles as u16);
         cycles
