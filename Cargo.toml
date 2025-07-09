@@ -46,3 +46,7 @@ harness = false
 
 [profile.bench]
 lto = true
+
+[profile.release]
+lto = "fat"
+panic = "abort"
