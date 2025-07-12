@@ -15,11 +15,15 @@ impl<'a> Tile<'a> {
         let make_line = |b1: u8, b2: u8| -> [u8; 8] {
             let mut line = [0; 8];
 
-            for i in 0..8 {
-                // B1 is 64, B2 is 128
-                line[i] = line[i] + if ((b1 << i) & 0x80) == 0x80 { 1 } else { 0 };
-                line[i] = line[i] + if ((b2 << i) & 0x80) == 0x80 { 2 } else { 0 };
-            }
+            line[0] = ((b2 >> 6) & 0x2) + ((b1 >> 7) & 1);
+            line[1] = ((b2 >> 5) & 0x2) + ((b1 >> 6) & 1);
+            line[2] = ((b2 >> 4) & 0x2) + ((b1 >> 5) & 1);
+            line[3] = ((b2 >> 3) & 0x2) + ((b1 >> 4) & 1);
+            line[4] = ((b2 >> 2) & 0x2) + ((b1 >> 3) & 1);
+            line[5] = ((b2 >> 1) & 0x2) + ((b1 >> 2) & 1);
+            line[6] = ((b2 >> 0) & 0x2) + ((b1 >> 1) & 1);
+            line[7] = ((b2 << 1) & 0x2) + ((b1 >> 0) & 1);
+
             line
         };
 
@@ -35,6 +39,8 @@ impl<'a> Tile<'a> {
         tile
     }
 }
+
+/*
 
 pub struct TileRenderer<'a> {
     tiles: &'a [Tile<'a>],
@@ -109,6 +115,7 @@ pub fn get_background(tiles: &[Tile]) -> [[u8; 256]; 256] {
 
     pixels
 }
+*/
 
 #[cfg(test)]
 mod tests {

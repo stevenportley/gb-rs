@@ -1,6 +1,11 @@
+use zerocopy::FromBytes;
+
 use crate::interrupts::IntSource;
 use crate::oam::OamMap;
 use crate::tile::Tile;
+
+mod pixel;
+mod tile;
 
 // The number of tiles in all of VRAM
 pub const NTILES: usize = 384;
@@ -203,6 +208,7 @@ impl PPU {
     fn render_line(&mut self) {
         //TODO: Better timing
 
+        let ly = self.ly as usize;
         // Background
         let bg_line = if (self.lcdc & 0x1) == 0 {
             [0; 256]
@@ -210,7 +216,6 @@ impl PPU {
             self.render_bg_line(self.ly.wrapping_add(self.scy))
         };
 
-        let ly = self.ly as usize;
 
         let mut bg_iter = bg_line.iter().cycle().skip(self.scx.into());
         for pixel in &mut self.screen.buf[ly] {
@@ -332,9 +337,49 @@ impl PPU {
         pixels
     }
 
+    fn render_new_bg(&self, vram: &tile::VramBank, line: u8) -> [u8; BKG_WIDTH] {
+        // The number of tiles in a horizontal line
+        const N_TILES_IN_LINE: usize = BKG_WIDTH / 8;
+        
+        // The tile offset corresponding to the begining of this line
+        let y_tile_offset = (line as usize / 8) * N_TILES_IN_LINE;
+
+        // vertical offset inside the tile
+        // e.g. if we are drawing line 10, this should be 2
+        // since we are drawing the third line inside the tile
+        let vert_line_tile_offset: u8 = (line % 8).try_into().unwrap();
+
+        let mut pixels = [0; BKG_WIDTH];
+        let high_tile_map = self.lcdc & 0x8 == 0x8;
+        let alt_address_mode = self.lcdc & 0x10 == 0;
+        let mut i = 0;
+
+        for (_, eight_pixels) in pixels.chunks_exact_mut(8).enumerate() {
+            let tile = vram.get_bg_tile(y_tile_offset + i, alt_address_mode, high_tile_map);
+            tile.lines[vert_line_tile_offset as usize].render(eight_pixels, tile::Palette(self.bgp));
+
+            /*
+            eight_pixels
+                .copy_from_slice(&tiles[y_tile_offset + i].pixel_buf(vert_line_tile_offset));
+            */
+            i += 1;
+        }
+
+        pixels
+
+    }
+
+    fn render_bg_line(&self, ly: u8) -> [u8; BKG_WIDTH] {
+
+        let (vram, _) = tile::VramBank::ref_from_prefix(&self.vram).unwrap();
+        self.render_new_bg(vram, ly)
+    }
+
+    /*
     fn render_bg_line(&self, ly: u8) -> [u8; BKG_WIDTH] {
         Self::render_tiles(&self.get_background_tiles(), ly)
     }
+    */
 
     fn render_window_line(&self, ly: u8) -> [u8; BKG_WIDTH] {
         //TODO: We can do optimizations for rendering BG w/ Window
