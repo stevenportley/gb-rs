@@ -1,5 +1,6 @@
 use zerocopy::FromBytes;
 use zerocopy_derive::{FromBytes, Immutable, KnownLayout};
+use core::iter::IntoIterator;
 
 
 #[derive(Clone, Copy)]
@@ -20,38 +21,23 @@ impl Line {
     pub fn apply_palette(color_id: u8, palette: Palette) -> u8 {
         return (palette.0 >> (2 * color_id)) & 0x3;
     }
-    
-    pub fn render(&self, dest: &mut [u8], palette: Palette) {
-        assert_eq!(dest.len(), 8);
-        let b1 = self.data[0];
-        let b2 = self.data[1];
 
-            dest[0] = ((b2 >> 6) & 0x2) + ((b1 >> 7) & 1);
-            dest[1] = ((b2 >> 5) & 0x2) + ((b1 >> 6) & 1);
-            dest[2] = ((b2 >> 4) & 0x2) + ((b1 >> 5) & 1);
-            dest[3] = ((b2 >> 3) & 0x2) + ((b1 >> 4) & 1);
-            dest[4] = ((b2 >> 2) & 0x2) + ((b1 >> 3) & 1);
-            dest[5] = ((b2 >> 1) & 0x2) + ((b1 >> 2) & 1);
-            dest[6] = ((b2 >> 0) & 0x2) + ((b1 >> 1) & 1);
-            dest[7] = ((b2 << 1) & 0x2) + ((b1 >> 0) & 1);
-
-    }
-
-    pub fn partial_render(&self, dest: &mut [u8], palette: Palette) {
-        let d_iter = dest.iter_mut().take(8);
-        let mut idx = 7;
+    #[inline(always)]
+    pub fn render<'a>(&self, dest: impl IntoIterator<Item = &'a mut u8>, palette: Palette) {
+        let d_iter = dest.into_iter().take(8);
+        let mut idx = 8;
 
         let b1 = self.data[0];
         let b2 = self.data[1];
 
         for d in d_iter {
+            idx -= 1;
             // The corresponding bit in each byte that make
             // up the 2 index
-            let _b2 = b2.checked_shr(idx - 1).unwrap_or(0) & 0x2;
+            let _b2 = b2.checked_shr(idx).unwrap_or(0) & 0x1;
             let _b1 = b1.checked_shr(idx).unwrap_or(0) & 0x1;
-            let color_id = _b2 + _b1;
+            let color_id = (2 * _b2) + _b1;
             *d = Self::apply_palette(color_id, palette);
-            idx -= 1;
         }
 
 
