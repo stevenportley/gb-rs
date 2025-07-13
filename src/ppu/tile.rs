@@ -1,6 +1,5 @@
-use zerocopy_derive::{FromBytes, Immutable, KnownLayout};
 use core::iter::IntoIterator;
-
+use zerocopy_derive::{FromBytes, Immutable, KnownLayout};
 
 #[derive(Clone, Copy)]
 pub struct Palette(pub u8);
@@ -15,7 +14,6 @@ pub struct Line {
 }
 
 impl Line {
-
     #[inline(always)]
     pub fn apply_palette(color_id: u8, palette: Palette) -> u8 {
         return (palette.0 >> (2 * color_id)) & 0x3;
@@ -38,12 +36,8 @@ impl Line {
             let color_id = (2 * _b2) + _b1;
             *d = Self::apply_palette(color_id, palette);
         }
-
-
     }
-
 }
-
 
 #[derive(FromBytes, Immutable, KnownLayout)]
 pub struct Tile {
@@ -52,7 +46,7 @@ pub struct Tile {
 
 impl Tile {
     pub fn render_with_palette(&self, palette: Palette) -> [[u8; 8]; 8] {
-        let mut tile = [[0;8]; 8];
+        let mut tile = [[0; 8]; 8];
 
         for i in 0..8 {
             self.lines[i].render(&mut tile[i], palette);
@@ -73,11 +67,8 @@ pub struct VramBank {
     tilemap1: [u8; 32 * 32],
 }
 
-
 impl VramBank {
-
     pub fn get_bg_tile(&self, idx: usize, alt_address_mode: bool, high_tile_map: bool) -> &Tile {
-
         let tile_idx = if high_tile_map {
             self.tilemap1[idx]
         } else {
@@ -92,5 +83,4 @@ impl VramBank {
             &self.tiles[tile_idx as usize]
         }
     }
-
 }
