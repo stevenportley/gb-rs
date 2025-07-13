@@ -1,4 +1,3 @@
-use zerocopy::FromBytes;
 use zerocopy_derive::{FromBytes, Immutable, KnownLayout};
 use core::iter::IntoIterator;
 

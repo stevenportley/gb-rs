@@ -4,7 +4,6 @@ use crate::interrupts::IntSource;
 use crate::oam::OamMap;
 use crate::tile::Tile;
 
-mod pixel;
 mod tile;
 
 // The number of tiles in all of VRAM
