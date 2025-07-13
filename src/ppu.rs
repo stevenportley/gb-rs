@@ -47,6 +47,7 @@ pub struct PPU {
     mode: PpuMode,
     r_cyc: i32,
     pub screen: Frame,
+    pub cnt : i32,
 }
 
 #[derive(Debug)]
@@ -97,6 +98,7 @@ impl PPU {
             mode: PpuMode::OAMSCAN,
             r_cyc: 20,
             screen: Frame::new(),
+            cnt: 0,
         }
     }
 
@@ -211,11 +213,12 @@ impl PPU {
         let ly = self.ly as usize;
 
         self.render_new_bg2();
-        /*
         // Background
+        /*
         let bg_line = if (self.lcdc & 0x1) == 0 {
             [0; 256]
         } else {
+            self.cnt += 1;
             self.render_bg_line(self.ly.wrapping_add(self.scy))
         };
 
@@ -343,7 +346,7 @@ impl PPU {
 
     fn render_new_bg2(&mut self) {
 
-        let (vram, _) = tile::VramBank::ref_from_prefix(&self.vram).unwrap();
+        let vram = tile::VramBank::ref_from_bytes(&self.vram).unwrap();
         let mut line_buf: &mut [u8] = &mut self.screen.buf[self.ly as usize];
 
         if self.lcdc & 0x01 == 0 {
@@ -359,6 +362,9 @@ impl PPU {
         // The tile offset corresponding to the begining of this line
         let y_tile_offset = (line as usize / 8) * N_TILES_IN_LINE;
 
+        // The number of tiles we are offset within this line
+        let x_tile_offset = usize::from(self.scx / 8);
+
         // vertical offset inside the tile
         // e.g. if we are drawing line 10, this should be 2
         // since we are drawing the third line inside the tile
@@ -368,9 +374,14 @@ impl PPU {
         let alt_address_mode = self.lcdc & 0x10 == 0;
         let palette = tile::Palette(self.bgp);
 
+        let tiles_this_line = y_tile_offset..y_tile_offset+N_TILES_IN_LINE;
+        
 
+        let mut tile_iter = tiles_this_line.into_iter().cycle().skip(x_tile_offset);
 
-        let mut tile_idx : usize = y_tile_offset + usize::from(self.scx.div_ceil(8));
+        if self.cnt >= 10000 && self.ly == 132 {
+            self.cnt += 1;
+        }
 
         // If scx is not a mulitple of 8 (e.g. it's halfway inside a tile)
         // render the end of the previous tile
@@ -378,7 +389,7 @@ impl PPU {
             let remaining = (8 - (self.scx % 8)) as usize;
 
             let mut tile_data = [0_u8; 8];
-            let tile = vram.get_bg_tile(tile_idx - 1, alt_address_mode, high_tile_map);
+            let tile = vram.get_bg_tile(tile_iter.next().unwrap(), alt_address_mode, high_tile_map);
             tile.lines[vert_line_tile_offset as usize].render(&mut tile_data, palette);
             line_buf[..remaining].copy_from_slice(&tile_data[8-remaining..]);
             line_buf = &mut line_buf[remaining..];
@@ -387,13 +398,14 @@ impl PPU {
         let (tile_chunks, remain) = line_buf.as_chunks_mut::<8>();
 
         for tile_buf in tile_chunks {
-            let tile = vram.get_bg_tile(tile_idx, alt_address_mode, high_tile_map);
+            let tile = vram.get_bg_tile(tile_iter.next().unwrap(), alt_address_mode, high_tile_map);
             tile.lines[vert_line_tile_offset as usize].render(tile_buf, palette);
-            tile_idx += 1;
         }
        
-        let tile = vram.get_bg_tile(tile_idx, alt_address_mode, high_tile_map);
+        let tile = vram.get_bg_tile(tile_iter.next().unwrap(), alt_address_mode, high_tile_map);
         tile.lines[vert_line_tile_offset as usize].render(remain, palette);
+
+        self.cnt += 1;
     }
 
     fn render_new_bg(&self, vram: &tile::VramBank, line: u8) -> [u8; BKG_WIDTH] {
@@ -422,6 +434,10 @@ impl PPU {
                 .copy_from_slice(&tiles[y_tile_offset + i].pixel_buf(vert_line_tile_offset));
             */
             i += 1;
+        }
+
+        if self.cnt >= 10000 && self.ly == 132 {
+            panic!("cnt: {:?}, tile_idx: {:?}, y_tile_offset: {:?}, vert_line_tile_offset: {:?}", self.cnt, i, y_tile_offset, vert_line_tile_offset);
         }
 
         pixels

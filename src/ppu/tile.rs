@@ -72,7 +72,6 @@ pub struct VramBank {
     tiles: [Tile; 384],
     tilemap0: [u8; 32 * 32],
     tilemap1: [u8; 32 * 32],
-    //oam_map: [u8; 32 * 32],
 }
 
 
