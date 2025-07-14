@@ -1,6 +1,10 @@
+use zerocopy::FromBytes;
+
 use crate::interrupts::IntSource;
 use crate::oam::OamMap;
 use crate::tile::Tile;
+
+mod tile;
 
 // The number of tiles in all of VRAM
 pub const NTILES: usize = 384;
@@ -203,19 +207,9 @@ impl PPU {
     fn render_line(&mut self) {
         //TODO: Better timing
 
-        // Background
-        let bg_line = if (self.lcdc & 0x1) == 0 {
-            [0; 256]
-        } else {
-            self.render_bg_line(self.ly.wrapping_add(self.scy))
-        };
-
         let ly = self.ly as usize;
 
-        let mut bg_iter = bg_line.iter().cycle().skip(self.scx.into());
-        for pixel in &mut self.screen.buf[ly] {
-            *pixel = Self::render_pixel(*bg_iter.next().unwrap(), self.bgp);
-        }
+        self.render_bg2();
 
         // Window
         if self.lcdc & 0x20 != 0 && self.window_triggered {
@@ -330,6 +324,82 @@ impl PPU {
         }
 
         pixels
+    }
+
+    fn render_bg2_line(
+        vram: &tile::VramBank,
+        mut line_buf: &mut [u8],
+        line: u8,
+        offset: u8,
+        palette: tile::Palette,
+        high_tile_map: bool,
+        alt_address_mode: bool,
+    ) {
+        // The number of tiles in a horizontal line
+        const N_TILES_IN_LINE: usize = BKG_WIDTH / 8;
+
+        // The tile offset corresponding to the begining of this line
+        let y_tile_offset = (line as usize / 8) * N_TILES_IN_LINE;
+
+        // The number of tiles we are offset within this line
+        let x_tile_offset = usize::from(offset / 8);
+
+        // vertical offset inside the tile
+        // e.g. if we are drawing line 10, this should be 2
+        // since we are drawing the third line inside the tile
+        let vert_line_tile_offset: usize = (line % 8).try_into().unwrap();
+
+        let tiles_this_line = y_tile_offset..y_tile_offset + N_TILES_IN_LINE;
+
+        let mut tile_iter = tiles_this_line.into_iter().cycle().skip(x_tile_offset);
+
+        // If scx is not a mulitple of 8 (e.g. it's halfway inside a tile)
+        // render the end of the previous tile
+        if offset % 8 != 0 {
+            let remaining = (8 - (offset % 8)) as usize;
+
+            let mut tile_data = [0_u8; 8];
+            let tile = vram.get_bg_tile(tile_iter.next().unwrap(), alt_address_mode, high_tile_map);
+            tile.lines[vert_line_tile_offset as usize].render(&mut tile_data, palette);
+            line_buf[..remaining].copy_from_slice(&tile_data[8 - remaining..]);
+            line_buf = &mut line_buf[remaining..];
+        }
+
+        let (tile_chunks, remain) = line_buf.as_chunks_mut::<8>();
+
+        for tile_buf in tile_chunks {
+            let tile = vram.get_bg_tile(tile_iter.next().unwrap(), alt_address_mode, high_tile_map);
+            tile.lines[vert_line_tile_offset as usize].render(tile_buf, palette);
+        }
+
+        let tile = vram.get_bg_tile(tile_iter.next().unwrap(), alt_address_mode, high_tile_map);
+        tile.lines[vert_line_tile_offset as usize].render(remain, palette);
+    }
+
+    fn render_bg2(&mut self) {
+        //TODO: This just renders the BG, have it render
+        //      the window in the same pass for opt
+
+        let line_buf: &mut [u8] = &mut self.screen.buf[self.ly as usize];
+        if self.lcdc & 0x01 == 0 {
+            line_buf.fill(0);
+            return;
+        }
+
+        let vram = tile::VramBank::ref_from_bytes(&self.vram).unwrap();
+        let high_tile_map = self.lcdc & 0x8 == 0x8;
+        let alt_address_mode = self.lcdc & 0x10 == 0;
+        let palette = tile::Palette(self.bgp);
+
+        Self::render_bg2_line(
+            vram,
+            line_buf,
+            self.ly.wrapping_add(self.scy),
+            self.scx,
+            palette,
+            high_tile_map,
+            alt_address_mode,
+        );
     }
 
     fn render_bg_line(&self, ly: u8) -> [u8; BKG_WIDTH] {
