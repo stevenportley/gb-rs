@@ -1,3 +1,4 @@
+use tile::Palette;
 use zerocopy::FromBytes;
 
 use crate::interrupts::IntSource;
@@ -204,6 +205,73 @@ impl PPU {
         return (pallete >> (2 * color_id)) & 0x3;
     }
 
+    fn render_sprites(&mut self) {
+        let oam = tile::Oam::ref_from_bytes(&self.oam).unwrap();
+        let vram = tile::VramBank::ref_from_bytes(&self.vram).unwrap();
+
+        let large_sprites = self.large_sprites();
+        let screen_line = &mut self.screen.buf[self.ly as usize];
+        let objs = oam.get_oams_line(self.ly, large_sprites);
+
+        for obj in objs {
+            let x = obj.x as usize;
+
+            if x == 0 || x >= 168 {
+                //Offset screen
+                continue;
+            }
+
+            // Shift LY to sprite y_pos space,
+            // it's offset by 16 to allow scrolling in
+            let obj_offset = (self.ly + 16) - obj.y;
+
+            //TODO: Can we do this without a staging buffer?
+            let mut oam_pixels = [0_u8; 8];
+            let pal = if obj.flags.dmg_palette() {
+                self.obp1
+            } else {
+                self.obp0
+            };
+
+            obj.render(
+                vram,
+                obj_offset,
+                large_sprites,
+                tile::Palette(pal),
+                &mut oam_pixels,
+            );
+
+            let (dst, src) = {
+                if x < 8 {
+                    // Clipped at beginning of line
+                    (&mut screen_line[..x], &oam_pixels[8 - x..])
+                } else if x > 160 {
+                    // Clipped at end of line
+                    let b = 168 - x;
+                    (&mut screen_line[x - 8..], &oam_pixels[..b])
+                } else {
+                    (&mut screen_line[x - 8..x], &oam_pixels[..])
+                }
+            };
+
+            assert!(dst.len() == src.len());
+
+            if obj.flags.priority() {
+                for i in 0..dst.len() {
+                    if dst[i] == 0 {
+                        dst[i] = src[i];
+                    }
+                }
+            } else {
+                for i in 0..dst.len() {
+                    if src[i] != 0 {
+                        dst[i] = src[i];
+                    }
+                }
+            }
+        }
+    }
+
     fn render_line(&mut self) {
         //TODO: Better timing
 
@@ -237,6 +305,8 @@ impl PPU {
 
         // Sprites
         if self.obj_en() {
+            self.render_sprites()
+            /*
             let oam_map = OamMap::from_mem(&self.oam);
 
             let sprite_tiles: [Tile; 256] = core::array::from_fn(|tile_index| {
@@ -299,6 +369,7 @@ impl PPU {
                     }
                 }
             }
+            */
         }
     }
 
