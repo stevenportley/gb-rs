@@ -1,6 +1,6 @@
 #[derive(Clone, Copy)]
 pub struct Tile<'a> {
-    data: &'a [u8],
+    pub data: &'a [u8],
 }
 
 impl<'a> Tile<'a> {

@@ -16,6 +16,7 @@ std = []
 heapless = "0.8.0"
 zerocopy = "0.8"
 zerocopy-derive = "0.8"
+bitfield-struct = "0.11"
 
 
 [[example]]
