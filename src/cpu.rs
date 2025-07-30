@@ -739,14 +739,6 @@ impl<T: CartridgeData> Cpu<T> {
         };
 
         cycles
-
-        /*
-        let next_byte = cpu.load_byte();
-        let instr = Self::cb_prefix_decode(next_byte);
-        let cycles = cpu.execute_instr(instr);
-
-        cycles as u8
-            */
     }
 
     fn di(cpu: &mut Self, _opcode: u8) -> u8 {
@@ -777,6 +769,7 @@ impl<T: CartridgeData> Cpu<T> {
         cpu.l = (new_hl & 0xFF) as u8;
         3
     }
+
     fn ld_sp_hl(cpu: &mut Self, _opcode: u8) -> u8 {
         let new_sp = ((cpu.h as u16) << 8) | cpu.l as u16;
         cpu.sp = new_sp;
@@ -902,265 +895,6 @@ impl<T: CartridgeData> Cpu<T> {
         cpu.wreg8(r, new_val);
         return if r == HL_PTR { 4 } else { 2 };
     }
-
-    const INSTR_HANDLERS: [fn(&mut Self, u8) -> u8; 256] = [
-        Self::no_op,        // 0x00
-        Self::ld_r16_imm16, // 0x01
-        Self::ld_r16mem_a,  // 0x02
-        Self::inc_r16,      //0x03
-        Self::inc_r8,       //0x04
-        Self::dec_r8,       //0x05
-        Self::ld_r8_imm8,   //0x06
-        Self::rlca,         //0x07
-        Self::ld_imm16_sp,  //0x08
-        Self::add_hl_r16,   //0x09
-        Self::ld_a_r16mem,  //0x0A
-        Self::dec_r16,      //0x0B
-        Self::inc_r8,       //0x0C
-        Self::dec_r8,       //0x0D
-        Self::ld_r8_imm8,   //0x0E
-        Self::rrca,         //0x0F
-        Self::stop,         //0x10
-        Self::ld_r16_imm16, //0x11
-        Self::ld_r16mem_a,  //0x12
-        Self::inc_r16,      //0x13
-        Self::inc_r8,       //0x14
-        Self::dec_r8,       //0x15
-        Self::ld_r8_imm8,   //0x16
-        Self::rla,          //0x17
-        Self::jr_imm8,      //0x18
-        Self::add_hl_r16,   //0x19
-        Self::ld_a_r16mem,  //0x1A
-        Self::dec_r16,      //0x1B
-        Self::inc_r8,       //0x1C
-        Self::dec_r8,       //0x1D
-        Self::ld_r8_imm8,   //0x1E
-        Self::rra,          //0x1F
-        Self::jr_cond_imm8, //0x20
-        Self::ld_r16_imm16, //0x21
-        Self::ld_r16mem_a,  //0x22
-        Self::inc_r16,      //0x23
-        Self::inc_r8,       //0x24
-        Self::dec_r8,       //0x25
-        Self::ld_r8_imm8,   //0x26
-        Self::daa,          //0x27
-        Self::jr_cond_imm8, //0x28
-        Self::add_hl_r16,   //0x29
-        Self::ld_a_r16mem,  //0x2A
-        Self::dec_r16,      //0x2B
-        Self::inc_r8,       //0x2C
-        Self::dec_r8,       //0x2D
-        Self::ld_r8_imm8,   //0x2E
-        Self::cpl,          //0x2F
-        Self::jr_cond_imm8, //0x30
-        Self::ld_r16_imm16, //0x31
-        Self::ld_r16mem_a,  //0x32
-        Self::inc_r16,      //0x33
-        Self::inc_r8,       //0x34
-        Self::dec_r8,       //0x35
-        Self::ld_r8_imm8,   //0x36
-        Self::scf,          //0x37
-        Self::jr_cond_imm8, //0x38
-        Self::add_hl_r16,   //0x39
-        Self::ld_a_r16mem,  //0x3A
-        Self::dec_r16,      //0x3B
-        Self::inc_r8,       //0x3C
-        Self::dec_r8,       //0x3D
-        Self::ld_r8_imm8,   //0x3E
-        Self::ccf,          //0x3F
-        Self::ld_r8_r8,     //0x40 ...
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::halt, //0x76
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,
-        Self::ld_r8_r8,        //0x7F
-        Self::add_a_r8,        //0x80
-        Self::add_a_r8,        //0x81
-        Self::add_a_r8,        //0x82
-        Self::add_a_r8,        //0x83
-        Self::add_a_r8,        //0x84
-        Self::add_a_r8,        //0x85
-        Self::add_a_r8,        //0x86
-        Self::add_a_r8,        //0x87
-        Self::adc_a_r8,        //0x88
-        Self::adc_a_r8,        //0x89
-        Self::adc_a_r8,        //0x8A
-        Self::adc_a_r8,        //0x8B
-        Self::adc_a_r8,        //0x8C
-        Self::adc_a_r8,        //0x8D
-        Self::adc_a_r8,        //0x8E
-        Self::adc_a_r8,        //0x8F
-        Self::sub_a_r8,        //0x90
-        Self::sub_a_r8,        //0x91
-        Self::sub_a_r8,        //0x92
-        Self::sub_a_r8,        //0x93
-        Self::sub_a_r8,        //0x94
-        Self::sub_a_r8,        //0x95
-        Self::sub_a_r8,        //0x96
-        Self::sub_a_r8,        //0x97
-        Self::sbc_a_r8,        //0x98
-        Self::sbc_a_r8,        //0x99
-        Self::sbc_a_r8,        //0x9A
-        Self::sbc_a_r8,        //0x9B
-        Self::sbc_a_r8,        //0x9C
-        Self::sbc_a_r8,        //0x9D
-        Self::sbc_a_r8,        //0x9E
-        Self::sbc_a_r8,        //0x9F
-        Self::and_a_r8,        //0xA0
-        Self::and_a_r8,        //0xA1
-        Self::and_a_r8,        //0xA2
-        Self::and_a_r8,        //0xA3
-        Self::and_a_r8,        //0xA4
-        Self::and_a_r8,        //0xA5
-        Self::and_a_r8,        //0xA6
-        Self::and_a_r8,        //0xA7
-        Self::xor_a_r8,        //0xA8
-        Self::xor_a_r8,        //0xA9
-        Self::xor_a_r8,        //0xAA
-        Self::xor_a_r8,        //0xAB
-        Self::xor_a_r8,        //0xAC
-        Self::xor_a_r8,        //0xAD
-        Self::xor_a_r8,        //0xAE
-        Self::xor_a_r8,        //0xAF
-        Self::or_a_r8,         //0xB0
-        Self::or_a_r8,         //0xB1
-        Self::or_a_r8,         //0xB2
-        Self::or_a_r8,         //0xB3
-        Self::or_a_r8,         //0xB4
-        Self::or_a_r8,         //0xB5
-        Self::or_a_r8,         //0xB6
-        Self::or_a_r8,         //0xB7
-        Self::cp_a_r8,         //0xB8
-        Self::cp_a_r8,         //0xB9
-        Self::cp_a_r8,         //0xBA
-        Self::cp_a_r8,         //0xBB
-        Self::cp_a_r8,         //0xBC
-        Self::cp_a_r8,         //0xBD
-        Self::cp_a_r8,         //0xBE
-        Self::cp_a_r8,         //0xBF
-        Self::ret_cond,        //0xC0
-        Self::pop_r16stk,      //0xC1
-        Self::jp_cond_imm16,   //0xC2
-        Self::jp_imm16,        //0xC3
-        Self::call_cond_imm16, //0xC4
-        Self::push_r16stk,     //0xC5
-        Self::add_a_imm8,      //0xC6
-        Self::rst_tgt3,        //0xC7
-        Self::ret_cond,        //0xC8
-        Self::ret,             //0xC9
-        Self::jp_cond_imm16,   //0xCA
-        Self::prefix,          //0xCB prefix!
-        Self::call_cond_imm16, //0xCC
-        Self::call_imm16,      //0xCD
-        Self::adc_a_imm8,      //0xCE
-        Self::rst_tgt3,        //0xCF
-        Self::ret_cond,        //0xD0
-        Self::pop_r16stk,      //0xD1
-        Self::jp_cond_imm16,   //0xD2
-        Self::invalid,         //0xD3
-        Self::call_cond_imm16, //0xD4
-        Self::push_r16stk,     //0xD5
-        Self::sub_a_imm8,      //0xD6
-        Self::rst_tgt3,        //0xD7
-        Self::ret_cond,        //0xD8
-        Self::reti,            //0xD9
-        Self::jp_cond_imm16,   //0xDA
-        Self::invalid,         //0xDB
-        Self::call_cond_imm16, //0xDC
-        Self::invalid,         //0xDD
-        Self::sbc_a_imm8,      //0xDE
-        Self::rst_tgt3,        //0xDF
-        Self::ldh_imm8_a,      //0xE0
-        Self::pop_r16stk,      //0xE1
-        Self::ldh_c_a,         //0xE2
-        Self::invalid,         //0xE3
-        Self::invalid,         //0xE4
-        Self::push_r16stk,     //0xE5
-        Self::and_a_imm8,      //0xE6
-        Self::rst_tgt3,        //0xE7
-        Self::add_sp_imm8,     //0xE8
-        Self::jp_hl,           //0xE9
-        Self::ld_imm16_a,      //0xEA
-        Self::invalid,         //0xEB
-        Self::invalid,         //0xEC
-        Self::invalid,         //0xED
-        Self::xor_a_imm8,      //0xEE
-        Self::rst_tgt3,        //0xEF
-        Self::ldh_a_imm8,      //0xF0
-        Self::pop_r16stk,      //0xF1
-        Self::ldh_a_c,         //0xF2
-        Self::di,              //0xF3
-        Self::invalid,         //0xF4
-        Self::push_r16stk,     //0xF5
-        Self::or_a_imm8,       //0xF6
-        Self::rst_tgt3,        //0xF7
-        Self::ld_hl_sp_imm8,   //0xF8
-        Self::ld_sp_hl,        //0xF9
-        Self::ld_a_imm16,      //0xFA
-        Self::ei,              //0xFB
-        Self::invalid,         //0xFC
-        Self::invalid,         //0xFD
-        Self::cp_a_imm8,       //0xFE
-        Self::rst_tgt3,        //0xFF
-    ];
 
     //TODO: Add an API to build the CPU in a state that
     //      does not skip the boot rom
@@ -1441,27 +1175,149 @@ impl<T: CartridgeData> Cpu<T> {
             }
         }
 
-        unsafe {
-            core::arch::asm!("NOP");
-        }
-        unsafe {
-            core::arch::asm!("NOP");
-        }
-        unsafe {
-            core::arch::asm!("NOP");
-        }
         let opcode = self.bus.read(self.pc);
         self.pc += 1;
-        let cycles = Self::INSTR_HANDLERS[opcode as usize](self, opcode).into();
-        unsafe {
-            core::arch::asm!("NOP");
+        let cycles = match opcode {
+            0x00 => Self::no_op(self, opcode),
+            0x01 => Self::ld_r16_imm16(self, opcode),
+            0x02 => Self::ld_r16mem_a(self, opcode),
+            0x03 => Self::inc_r16(self, opcode),
+            0x04 => Self::inc_r8(self, opcode),
+            0x05 => Self::dec_r8(self, opcode),
+            0x06 => Self::ld_r8_imm8(self, opcode),
+            0x07 => Self::rlca(self, opcode),
+            0x08 => Self::ld_imm16_sp(self, opcode),
+            0x09 => Self::add_hl_r16(self, opcode),
+            0x0A => Self::ld_a_r16mem(self, opcode),
+            0x0B => Self::dec_r16(self, opcode),
+            0x0C => Self::inc_r8(self, opcode),
+            0x0D => Self::dec_r8(self, opcode),
+            0x0E => Self::ld_r8_imm8(self, opcode),
+            0x0F => Self::rrca(self, opcode),
+            0x10 => Self::stop(self, opcode),
+            0x11 => Self::ld_r16_imm16(self, opcode),
+            0x12 => Self::ld_r16mem_a(self, opcode),
+            0x13 => Self::inc_r16(self, opcode),
+            0x14 => Self::inc_r8(self, opcode),
+            0x15 => Self::dec_r8(self, opcode),
+            0x16 => Self::ld_r8_imm8(self, opcode),
+            0x17 => Self::rla(self, opcode),
+            0x18 => Self::jr_imm8(self, opcode),
+            0x19 => Self::add_hl_r16(self, opcode),
+            0x1A => Self::ld_a_r16mem(self, opcode),
+            0x1B => Self::dec_r16(self, opcode),
+            0x1C => Self::inc_r8(self, opcode),
+            0x1D => Self::dec_r8(self, opcode),
+            0x1E => Self::ld_r8_imm8(self, opcode),
+            0x1F => Self::rra(self, opcode),
+            0x20 => Self::jr_cond_imm8(self, opcode),
+            0x21 => Self::ld_r16_imm16(self, opcode),
+            0x22 => Self::ld_r16mem_a(self, opcode),
+            0x23 => Self::inc_r16(self, opcode),
+            0x24 => Self::inc_r8(self, opcode),
+            0x25 => Self::dec_r8(self, opcode),
+            0x26 => Self::ld_r8_imm8(self, opcode),
+            0x27 => Self::daa(self, opcode),
+            0x28 => Self::jr_cond_imm8(self, opcode),
+            0x29 => Self::add_hl_r16(self, opcode),
+            0x2A => Self::ld_a_r16mem(self, opcode),
+            0x2B => Self::dec_r16(self, opcode),
+            0x2C => Self::inc_r8(self, opcode),
+            0x2D => Self::dec_r8(self, opcode),
+            0x2E => Self::ld_r8_imm8(self, opcode),
+            0x2F => Self::cpl(self, opcode),
+            0x30 => Self::jr_cond_imm8(self, opcode),
+            0x31 => Self::ld_r16_imm16(self, opcode),
+            0x32 => Self::ld_r16mem_a(self, opcode),
+            0x33 => Self::inc_r16(self, opcode),
+            0x34 => Self::inc_r8(self, opcode),
+            0x35 => Self::dec_r8(self, opcode),
+            0x36 => Self::ld_r8_imm8(self, opcode),
+            0x37 => Self::scf(self, opcode),
+            0x38 => Self::jr_cond_imm8(self, opcode),
+            0x39 => Self::add_hl_r16(self, opcode),
+            0x3A => Self::ld_a_r16mem(self, opcode),
+            0x3B => Self::dec_r16(self, opcode),
+            0x3C => Self::inc_r8(self, opcode),
+            0x3D => Self::dec_r8(self, opcode),
+            0x3E => Self::ld_r8_imm8(self, opcode),
+            0x3F => Self::ccf(self, opcode),
+            0x40..=0x75 | 0x77..=0x7F => Self::ld_r8_r8(self, opcode),
+            0x76 => Self::halt(self, opcode),
+            0x80..=0x87 => Self::add_a_r8(self, opcode),
+            0x88..=0x8F => Self::adc_a_r8(self, opcode),
+            0x90..=0x97 => Self::sub_a_r8(self, opcode),
+            0x98..=0x9F => Self::sbc_a_r8(self, opcode),
+            0xA0..=0xA7 => Self::and_a_r8(self, opcode),
+            0xA8..=0xAF => Self::xor_a_r8(self, opcode),
+            0xB0..=0xB7 => Self::or_a_r8(self, opcode),
+            0xB8..=0xBF => Self::cp_a_r8(self, opcode),
+            0xC0 => Self::ret_cond(self, opcode),
+            0xC1 => Self::pop_r16stk(self, opcode),
+            0xC2 => Self::jp_cond_imm16(self, opcode),
+            0xC3 => Self::jp_imm16(self, opcode),
+            0xC4 => Self::call_cond_imm16(self, opcode),
+            0xC5 => Self::push_r16stk(self, opcode),
+            0xC6 => Self::add_a_imm8(self, opcode),
+            0xC7 => Self::rst_tgt3(self, opcode),
+            0xC8 => Self::ret_cond(self, opcode),
+            0xC9 => Self::ret(self, opcode),
+            0xCA => Self::jp_cond_imm16(self, opcode),
+            0xCB => Self::prefix(self, opcode),
+            0xCC => Self::call_cond_imm16(self, opcode),
+            0xCD => Self::call_imm16(self, opcode),
+            0xCE => Self::adc_a_imm8(self, opcode),
+            0xCF => Self::rst_tgt3(self, opcode),
+            0xD0 => Self::ret_cond(self, opcode),
+            0xD1 => Self::pop_r16stk(self, opcode),
+            0xD2 => Self::jp_cond_imm16(self, opcode),
+            0xD3 => Self::invalid(self, opcode),
+            0xD4 => Self::call_cond_imm16(self, opcode),
+            0xD5 => Self::push_r16stk(self, opcode),
+            0xD6 => Self::sub_a_imm8(self, opcode),
+            0xD7 => Self::rst_tgt3(self, opcode),
+            0xD8 => Self::ret_cond(self, opcode),
+            0xD9 => Self::reti(self, opcode),
+            0xDA => Self::jp_cond_imm16(self, opcode),
+            0xDB => Self::invalid(self, opcode),
+            0xDC => Self::call_cond_imm16(self, opcode),
+            0xDD => Self::invalid(self, opcode),
+            0xDE => Self::sbc_a_imm8(self, opcode),
+            0xDF => Self::rst_tgt3(self, opcode),
+            0xE0 => Self::ldh_imm8_a(self, opcode),
+            0xE1 => Self::pop_r16stk(self, opcode),
+            0xE2 => Self::ldh_c_a(self, opcode),
+            0xE3 => Self::invalid(self, opcode),
+            0xE4 => Self::invalid(self, opcode),
+            0xE5 => Self::push_r16stk(self, opcode),
+            0xE6 => Self::and_a_imm8(self, opcode),
+            0xE7 => Self::rst_tgt3(self, opcode),
+            0xE8 => Self::add_sp_imm8(self, opcode),
+            0xE9 => Self::jp_hl(self, opcode),
+            0xEA => Self::ld_imm16_a(self, opcode),
+            0xEB => Self::invalid(self, opcode),
+            0xEC => Self::invalid(self, opcode),
+            0xED => Self::invalid(self, opcode),
+            0xEE => Self::xor_a_imm8(self, opcode),
+            0xEF => Self::rst_tgt3(self, opcode),
+            0xF0 => Self::ldh_a_imm8(self, opcode),
+            0xF1 => Self::pop_r16stk(self, opcode),
+            0xF2 => Self::ldh_a_c(self, opcode),
+            0xF3 => Self::di(self, opcode),
+            0xF4 => Self::invalid(self, opcode),
+            0xF5 => Self::push_r16stk(self, opcode),
+            0xF6 => Self::or_a_imm8(self, opcode),
+            0xF7 => Self::rst_tgt3(self, opcode),
+            0xF8 => Self::ld_hl_sp_imm8(self, opcode),
+            0xF9 => Self::ld_sp_hl(self, opcode),
+            0xFA => Self::ld_a_imm16(self, opcode),
+            0xFB => Self::ei(self, opcode),
+            0xFC => Self::invalid(self, opcode),
+            0xFD => Self::invalid(self, opcode),
+            0xFE => Self::cp_a_imm8(self, opcode),
+            0xFF => Self::rst_tgt3(self, opcode),
         }
-        unsafe {
-            core::arch::asm!("NOP");
-        }
-        unsafe {
-            core::arch::asm!("NOP");
-        }
+        .into();
 
         self.bus.run_cycles(cycles as u16);
         cycles
