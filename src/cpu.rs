@@ -108,10 +108,12 @@ pub enum Instruction2 {
 */
 
 impl<T: CartridgeData> Cpu<T> {
+    #[inline(always)]
     fn no_op(_cpu: &mut Self, _opcode: u8) -> u8 {
         1
     }
 
+    #[inline(always)]
     fn ld_r16_imm16(cpu: &mut Self, opcode: u8) -> u8 {
         let r16 = (opcode >> 4) & 0x3;
         let imm16 = cpu.load_word();
@@ -119,12 +121,14 @@ impl<T: CartridgeData> Cpu<T> {
         3
     }
 
+    #[inline(always)]
     fn ld_r16mem_a(cpu: &mut Self, opcode: u8) -> u8 {
         let r16 = (opcode >> 4) & 0x3;
         cpu.wr16mem(r16, cpu.a);
         2
     }
 
+    #[inline(always)]
     fn inc_r16(cpu: &mut Self, opcode: u8) -> u8 {
         let r16 = (opcode >> 4) & 0x3;
         let plus_one = cpu.rreg16(r16).wrapping_add(1);
@@ -132,6 +136,7 @@ impl<T: CartridgeData> Cpu<T> {
         2
     }
 
+    #[inline(always)]
     fn inc_r8(cpu: &mut Self, opcode: u8) -> u8 {
         let r8 = (opcode >> 3) & 0x7;
         let before = cpu.rreg8(r8);
@@ -144,6 +149,7 @@ impl<T: CartridgeData> Cpu<T> {
         return if r8 == HL_PTR { 3 } else { 1 };
     }
 
+    #[inline(always)]
     fn dec_r8(cpu: &mut Self, opcode: u8) -> u8 {
         let r8 = (opcode >> 3) & 0x7;
         let before = cpu.rreg8(r8);
@@ -157,6 +163,7 @@ impl<T: CartridgeData> Cpu<T> {
         return if r8 == HL_PTR { 3 } else { 1 };
     }
 
+    #[inline(always)]
     fn ld_r8_imm8(cpu: &mut Self, opcode: u8) -> u8 {
         let r8 = (opcode >> 3) & 0x7;
         let imm8 = cpu.load_byte();
@@ -164,12 +171,14 @@ impl<T: CartridgeData> Cpu<T> {
         return if r8 == HL_PTR { 3 } else { 2 };
     }
 
+    #[inline(always)]
     fn rlca(cpu: &mut Self, _opcode: u8) -> u8 {
         cpu.rlc(A_REG);
         cpu.z_f = false;
         1
     }
 
+    #[inline(always)]
     fn ld_imm16_sp(cpu: &mut Self, _opcode: u8) -> u8 {
         let imm16 = cpu.load_word();
 
@@ -179,6 +188,7 @@ impl<T: CartridgeData> Cpu<T> {
         5
     }
 
+    #[inline(always)]
     fn add_hl_r16(cpu: &mut Self, opcode: u8) -> u8 {
         let r16 = (opcode >> 4) & 0x3;
         let hl_val = cpu.rreg16(HL_REG);
@@ -191,12 +201,14 @@ impl<T: CartridgeData> Cpu<T> {
         2
     }
 
+    #[inline(always)]
     fn ld_a_r16mem(cpu: &mut Self, opcode: u8) -> u8 {
         let r16mem = (opcode >> 4) & 0x3;
         cpu.a = cpu.rr16mem(r16mem);
         2
     }
 
+    #[inline(always)]
     fn dec_r16(cpu: &mut Self, opcode: u8) -> u8 {
         let r16 = (opcode >> 4) & 0x3;
         let minus_one = cpu.rreg16(r16).wrapping_sub(1);
@@ -204,22 +216,26 @@ impl<T: CartridgeData> Cpu<T> {
         2
     }
 
+    #[inline(always)]
     fn rrca(cpu: &mut Self, _opcode: u8) -> u8 {
         cpu.rrc(A_REG);
         cpu.z_f = false;
         1
     }
 
+    #[inline(always)]
     fn stop(_cpu: &mut Self, opcode: u8) -> u8 {
         todo!("Stop instruction not implemented! opcode: {}", opcode);
     }
 
+    #[inline(always)]
     fn rla(cpu: &mut Self, _opcode: u8) -> u8 {
         cpu.rl(A_REG);
         cpu.z_f = false;
         1
     }
 
+    #[inline(always)]
     fn jr_imm8(cpu: &mut Self, _opcode: u8) -> u8 {
         let offset = cpu.load_byte() as i8;
         let curr_pc = cpu.pc as i32;
@@ -228,12 +244,14 @@ impl<T: CartridgeData> Cpu<T> {
         return 3;
     }
 
+    #[inline(always)]
     fn rra(cpu: &mut Self, _opcode: u8) -> u8 {
         cpu.rr(A_REG);
         cpu.z_f = false;
         1
     }
 
+    #[inline(always)]
     fn jr_cond_imm8(cpu: &mut Self, opcode: u8) -> u8 {
         let cond = (opcode >> 3) & 0x3;
         let imm8 = cpu.load_byte();
@@ -248,6 +266,7 @@ impl<T: CartridgeData> Cpu<T> {
         return 2;
     }
 
+    #[inline(always)]
     fn daa(cpu: &mut Self, _opcode: u8) -> u8 {
         //https://forums.nesdev.org/viewtopic.php?t=15944
         if cpu.n_f {
@@ -272,6 +291,7 @@ impl<T: CartridgeData> Cpu<T> {
         1
     }
 
+    #[inline(always)]
     fn cpl(cpu: &mut Self, _opcode: u8) -> u8 {
         cpu.a = !cpu.a;
         cpu.n_f = true;
@@ -279,6 +299,7 @@ impl<T: CartridgeData> Cpu<T> {
         1
     }
 
+    #[inline(always)]
     fn scf(cpu: &mut Self, _opcode: u8) -> u8 {
         cpu.n_f = false;
         cpu.h_f = false;
@@ -286,6 +307,7 @@ impl<T: CartridgeData> Cpu<T> {
         1
     }
 
+    #[inline(always)]
     fn ccf(cpu: &mut Self, _opcode: u8) -> u8 {
         cpu.n_f = false;
         cpu.h_f = false;
@@ -293,6 +315,7 @@ impl<T: CartridgeData> Cpu<T> {
         return 1;
     }
 
+    #[inline(always)]
     fn ld_r8_r8(cpu: &mut Self, opcode: u8) -> u8 {
         let src = opcode & 0x7;
         let dst = (opcode >> 3) & 0x7;
@@ -305,6 +328,7 @@ impl<T: CartridgeData> Cpu<T> {
         };
     }
 
+    #[inline(always)]
     fn halt(cpu: &mut Self, _opcode: u8) -> u8 {
         if cpu.ime {
             cpu.sleep = true;
@@ -321,6 +345,7 @@ impl<T: CartridgeData> Cpu<T> {
         return 1;
     }
 
+    #[inline(always)]
     fn add_a_r8(cpu: &mut Self, opcode: u8) -> u8 {
         let r8 = opcode & 0x7;
         let reg_val = cpu.rreg8(r8);
@@ -335,6 +360,7 @@ impl<T: CartridgeData> Cpu<T> {
         return if r8 == HL_PTR { 2 } else { 1 };
     }
 
+    #[inline(always)]
     fn adc_a_r8(cpu: &mut Self, opcode: u8) -> u8 {
         let r8 = opcode & 0x7;
         let reg_val = cpu.rreg8(r8);
@@ -360,6 +386,7 @@ impl<T: CartridgeData> Cpu<T> {
         return if r8 == HL_PTR { 2 } else { 1 };
     }
 
+    #[inline(always)]
     fn sub_a_r8(cpu: &mut Self, opcode: u8) -> u8 {
         let r8 = opcode & 0x07;
         let reg_val = cpu.rreg8(r8);
@@ -374,6 +401,7 @@ impl<T: CartridgeData> Cpu<T> {
         return if r8 == HL_PTR { 2 } else { 1 };
     }
 
+    #[inline(always)]
     fn sbc_a_r8(cpu: &mut Self, opcode: u8) -> u8 {
         let r8 = opcode & 0x07;
         let carry = if cpu.c_f { 1 } else { 0 };
@@ -395,6 +423,7 @@ impl<T: CartridgeData> Cpu<T> {
         return if r8 == HL_PTR { 2 } else { 1 };
     }
 
+    #[inline(always)]
     fn and_a_r8(cpu: &mut Self, opcode: u8) -> u8 {
         let r8 = opcode & 0x7;
         cpu.a = cpu.a & cpu.rreg8(r8);
@@ -405,6 +434,7 @@ impl<T: CartridgeData> Cpu<T> {
         return if r8 == HL_PTR { 2 } else { 1 };
     }
 
+    #[inline(always)]
     fn xor_a_r8(cpu: &mut Self, opcode: u8) -> u8 {
         let r8 = opcode & 0x7;
         cpu.a = cpu.a ^ cpu.rreg8(r8);
@@ -415,6 +445,7 @@ impl<T: CartridgeData> Cpu<T> {
         return if r8 == HL_PTR { 2 } else { 1 };
     }
 
+    #[inline(always)]
     fn or_a_r8(cpu: &mut Self, opcode: u8) -> u8 {
         let r8 = opcode & 0x7;
         cpu.a = cpu.a | cpu.rreg8(r8);
@@ -425,6 +456,7 @@ impl<T: CartridgeData> Cpu<T> {
         return if r8 == HL_PTR { 2 } else { 1 };
     }
 
+    #[inline(always)]
     fn cp_a_r8(cpu: &mut Self, opcode: u8) -> u8 {
         let r8 = opcode & 0x7;
         let reg_val = cpu.rreg8(r8);
@@ -438,6 +470,7 @@ impl<T: CartridgeData> Cpu<T> {
         return if r8 == HL_PTR { 2 } else { 1 };
     }
 
+    #[inline(always)]
     fn add_a_imm8(cpu: &mut Self, _opcode: u8) -> u8 {
         let imm8 = cpu.load_byte();
         cpu.h_f = does_bit3_overflow(imm8, cpu.a);
@@ -450,6 +483,7 @@ impl<T: CartridgeData> Cpu<T> {
         2
     }
 
+    #[inline(always)]
     fn adc_a_imm8(cpu: &mut Self, _opcode: u8) -> u8 {
         let imm8 = cpu.load_byte();
         cpu.n_f = false;
@@ -474,6 +508,7 @@ impl<T: CartridgeData> Cpu<T> {
         return 2;
     }
 
+    #[inline(always)]
     fn sub_a_imm8(cpu: &mut Self, _opcode: u8) -> u8 {
         let imm8 = cpu.load_byte();
         let new_val = cpu.a.wrapping_sub(imm8);
@@ -487,6 +522,7 @@ impl<T: CartridgeData> Cpu<T> {
         2
     }
 
+    #[inline(always)]
     fn sbc_a_imm8(cpu: &mut Self, _opcode: u8) -> u8 {
         let imm8 = cpu.load_byte();
         let carry = if cpu.c_f { 1 } else { 0 };
@@ -505,6 +541,7 @@ impl<T: CartridgeData> Cpu<T> {
         2
     }
 
+    #[inline(always)]
     fn and_a_imm8(cpu: &mut Self, _opcode: u8) -> u8 {
         let imm8 = cpu.load_byte();
         cpu.a = cpu.a & imm8;
@@ -515,6 +552,7 @@ impl<T: CartridgeData> Cpu<T> {
         2
     }
 
+    #[inline(always)]
     fn xor_a_imm8(cpu: &mut Self, _opcode: u8) -> u8 {
         let imm8 = cpu.load_byte();
         cpu.a = cpu.a ^ imm8;
@@ -525,6 +563,7 @@ impl<T: CartridgeData> Cpu<T> {
         2
     }
 
+    #[inline(always)]
     fn or_a_imm8(cpu: &mut Self, _opcode: u8) -> u8 {
         let imm8 = cpu.load_byte();
         cpu.a = cpu.a | imm8;
@@ -535,6 +574,7 @@ impl<T: CartridgeData> Cpu<T> {
         2
     }
 
+    #[inline(always)]
     fn cp_a_imm8(cpu: &mut Self, _opcode: u8) -> u8 {
         let imm8 = cpu.load_byte();
 
@@ -547,6 +587,7 @@ impl<T: CartridgeData> Cpu<T> {
         2
     }
 
+    #[inline(always)]
     fn ret_cond(cpu: &mut Self, opcode: u8) -> u8 {
         let cond = (opcode >> 3) & 0x3;
         if !cpu.check_cond(cond) {
@@ -557,6 +598,7 @@ impl<T: CartridgeData> Cpu<T> {
         return 5;
     }
 
+    #[inline(always)]
     fn pop_r16stk(cpu: &mut Self, opcode: u8) -> u8 {
         let r16stk = (opcode >> 4) & 0x3;
         match r16stk {
@@ -590,6 +632,7 @@ impl<T: CartridgeData> Cpu<T> {
         3
     }
 
+    #[inline(always)]
     fn push_r16stk(cpu: &mut Self, opcode: u8) -> u8 {
         let r16stk = (opcode >> 4) & 0x3;
         let val = match r16stk {
@@ -613,17 +656,20 @@ impl<T: CartridgeData> Cpu<T> {
         return 4;
     }
 
+    #[inline(always)]
     fn ret(cpu: &mut Self, _opcode: u8) -> u8 {
         cpu.pc = cpu.pop_stack();
         return 4;
     }
 
+    #[inline(always)]
     fn reti(cpu: &mut Self, _opcode: u8) -> u8 {
         cpu.ime = true;
         cpu.pc = cpu.pop_stack();
         4
     }
 
+    #[inline(always)]
     fn jp_cond_imm16(cpu: &mut Self, opcode: u8) -> u8 {
         let cond = (opcode >> 3) & 0x3;
         let imm16 = cpu.load_word();
@@ -635,12 +681,14 @@ impl<T: CartridgeData> Cpu<T> {
         return 3;
     }
 
+    #[inline(always)]
     fn jp_imm16(cpu: &mut Self, _opcode: u8) -> u8 {
         let imm16 = cpu.load_word();
         cpu.pc = imm16;
         4
     }
 
+    #[inline(always)]
     fn call_cond_imm16(cpu: &mut Self, opcode: u8) -> u8 {
         let cond = (opcode >> 3) & 0x3;
         let imm16 = cpu.load_word();
@@ -654,6 +702,7 @@ impl<T: CartridgeData> Cpu<T> {
         return 6;
     }
 
+    #[inline(always)]
     fn call_imm16(cpu: &mut Self, _opcode: u8) -> u8 {
         let imm16 = cpu.load_word();
         cpu.push_stack(cpu.pc);
@@ -661,6 +710,7 @@ impl<T: CartridgeData> Cpu<T> {
         6
     }
 
+    #[inline(always)]
     fn rst_tgt3(cpu: &mut Self, opcode: u8) -> u8 {
         cpu.push_stack(cpu.pc);
         let tgt = (opcode >> 3) & 0x7;
@@ -668,21 +718,25 @@ impl<T: CartridgeData> Cpu<T> {
         return 4;
     }
 
+    #[inline(always)]
     fn invalid(_cpu: &mut Self, opcode: u8) -> u8 {
         panic!("Received invalid instruction! opcode: {}", opcode);
     }
 
+    #[inline(always)]
     fn ldh_imm8_a(cpu: &mut Self, _opcode: u8) -> u8 {
         let imm8 = cpu.load_byte();
         cpu.bus.write(imm8 as u16 + PAGE0_OFFSET, cpu.a);
         3
     }
 
+    #[inline(always)]
     fn ldh_c_a(cpu: &mut Self, _opcode: u8) -> u8 {
         cpu.bus.write(PAGE0_OFFSET + cpu.c as u16, cpu.a);
         2
     }
 
+    #[inline(always)]
     fn add_sp_imm8(cpu: &mut Self, _opcode: u8) -> u8 {
         let imm8 = cpu.load_byte();
         let s_i = imm8 as i8;
@@ -699,29 +753,34 @@ impl<T: CartridgeData> Cpu<T> {
         4
     }
 
+    #[inline(always)]
     fn jp_hl(cpu: &mut Self, _opcode: u8) -> u8 {
         let hl = ((cpu.h as u16) << 8) | cpu.l as u16;
         cpu.pc = hl;
         1
     }
 
+    #[inline(always)]
     fn ld_imm16_a(cpu: &mut Self, _opcode: u8) -> u8 {
         let imm16 = cpu.load_word();
         cpu.bus.write(imm16, cpu.a);
         4
     }
 
+    #[inline(always)]
     fn ldh_a_imm8(cpu: &mut Self, _opcode: u8) -> u8 {
         let imm8 = cpu.load_byte();
         cpu.a = cpu.bus.read(imm8 as u16 + PAGE0_OFFSET);
         3
     }
 
+    #[inline(always)]
     fn ldh_a_c(cpu: &mut Self, _opcode: u8) -> u8 {
         cpu.a = cpu.bus.read(cpu.c as u16 + PAGE0_OFFSET);
         2
     }
 
+    #[inline(always)]
     fn prefix(cpu: &mut Self, _opcode: u8) -> u8 {
         let next_byte = cpu.load_byte();
         let cycles = match next_byte {
@@ -741,16 +800,19 @@ impl<T: CartridgeData> Cpu<T> {
         cycles
     }
 
+    #[inline(always)]
     fn di(cpu: &mut Self, _opcode: u8) -> u8 {
         cpu.ime = false;
         1
     }
 
+    #[inline(always)]
     fn ei(cpu: &mut Self, _opcode: u8) -> u8 {
         cpu.ime = true;
         1
     }
 
+    #[inline(always)]
     fn ld_hl_sp_imm8(cpu: &mut Self, _opcode: u8) -> u8 {
         let imm8 = cpu.load_byte();
         let sp = cpu.sp as i32;
@@ -770,42 +832,49 @@ impl<T: CartridgeData> Cpu<T> {
         3
     }
 
+    #[inline(always)]
     fn ld_sp_hl(cpu: &mut Self, _opcode: u8) -> u8 {
         let new_sp = ((cpu.h as u16) << 8) | cpu.l as u16;
         cpu.sp = new_sp;
         2
     }
 
+    #[inline(always)]
     fn ld_a_imm16(cpu: &mut Self, _opcode: u8) -> u8 {
         let imm16 = cpu.load_word();
         cpu.a = cpu.bus.read(imm16);
         4
     }
 
+    #[inline(always)]
     fn prefix_rlc(cpu: &mut Self, opcode: u8) -> u8 {
         let r = opcode & 0x7;
         cpu.rlc(r);
         return if r == HL_PTR { 4 } else { 2 };
     }
 
+    #[inline(always)]
     fn prefix_rrc(cpu: &mut Self, opcode: u8) -> u8 {
         let r = opcode & 0x7;
         cpu.rrc(r);
         return if r == HL_PTR { 4 } else { 2 };
     }
 
+    #[inline(always)]
     fn prefix_rl(cpu: &mut Self, opcode: u8) -> u8 {
         let r = opcode & 0x7;
         cpu.rl(r);
         return if r == HL_PTR { 4 } else { 2 };
     }
 
+    #[inline(always)]
     fn prefix_rr(cpu: &mut Self, opcode: u8) -> u8 {
         let r = opcode & 0x7;
         cpu.rr(r);
         return if r == HL_PTR { 4 } else { 2 };
     }
 
+    #[inline(always)]
     fn prefix_sla(cpu: &mut Self, opcode: u8) -> u8 {
         let r = opcode & 0x7;
         let reg_val = cpu.rreg8(r);
@@ -819,6 +888,7 @@ impl<T: CartridgeData> Cpu<T> {
         return if r == HL_PTR { 4 } else { 2 };
     }
 
+    #[inline(always)]
     fn prefix_sra(cpu: &mut Self, opcode: u8) -> u8 {
         let r = opcode & 0x7;
         let reg_val = cpu.rreg8(r);
@@ -833,6 +903,7 @@ impl<T: CartridgeData> Cpu<T> {
         return if r == HL_PTR { 4 } else { 2 };
     }
 
+    #[inline(always)]
     fn prefix_swap(cpu: &mut Self, opcode: u8) -> u8 {
         let r = opcode & 0x7;
         let reg_val = cpu.rreg8(r);
@@ -848,6 +919,7 @@ impl<T: CartridgeData> Cpu<T> {
         return if r == HL_PTR { 4 } else { 2 };
     }
 
+    #[inline(always)]
     fn prefix_srl(cpu: &mut Self, opcode: u8) -> u8 {
         let r = opcode & 0x7;
         let reg_val = cpu.rreg8(r);
@@ -861,6 +933,7 @@ impl<T: CartridgeData> Cpu<T> {
         return if r == HL_PTR { 4 } else { 2 };
     }
 
+    #[inline(always)]
     fn prefix_bit(cpu: &mut Self, opcode: u8) -> u8 {
         let r = opcode & 0x7;
         let b3 = (opcode >> 3) & 0x7;
@@ -874,6 +947,7 @@ impl<T: CartridgeData> Cpu<T> {
         return if r == HL_PTR { 3 } else { 2 };
     }
 
+    #[inline(always)]
     fn prefix_res(cpu: &mut Self, opcode: u8) -> u8 {
         let r = opcode & 0x7;
         let b3 = (opcode >> 3) & 0x7;
@@ -885,6 +959,7 @@ impl<T: CartridgeData> Cpu<T> {
         return if r == HL_PTR { 4 } else { 2 };
     }
 
+    #[inline(always)]
     fn prefix_set(cpu: &mut Self, opcode: u8) -> u8 {
         let r = opcode & 0x7;
         let b3 = (opcode >> 3) & 0x7;
@@ -1103,6 +1178,7 @@ impl<T: CartridgeData> Cpu<T> {
         return (next as u16) | ((next_next as u16) << 8);
     }
 
+    #[inline(always)]
     fn rlc(&mut self, reg: u8) {
         let reg_val = self.rreg8(reg);
         let msb = reg_val >> 7;
@@ -1114,6 +1190,7 @@ impl<T: CartridgeData> Cpu<T> {
         self.wreg8(reg, (reg_val << 1) | msb);
     }
 
+    #[inline(always)]
     fn rl(&mut self, reg: u8) {
         let reg_val = self.rreg8(reg);
         let msb = reg_val >> 7;
@@ -1127,6 +1204,7 @@ impl<T: CartridgeData> Cpu<T> {
         self.c_f = msb == 1;
     }
 
+    #[inline(always)]
     fn rrc(&mut self, reg: u8) {
         let reg_val = self.rreg8(reg);
         let lsb = reg_val & 1;
@@ -1139,6 +1217,7 @@ impl<T: CartridgeData> Cpu<T> {
         self.c_f = lsb == 1;
     }
 
+    #[inline(always)]
     fn rr(&mut self, reg: u8) {
         let reg_val = self.rreg8(reg);
         let new_msb = if self.c_f { 0x80 } else { 0 };
@@ -1151,6 +1230,7 @@ impl<T: CartridgeData> Cpu<T> {
         self.c_f = (reg_val & 1) == 1;
     }
 
+    #[inline(always)]
     pub fn is_passed(&self) -> bool {
         return self.bus.is_passed();
     }
