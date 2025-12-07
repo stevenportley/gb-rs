@@ -1,3 +1,5 @@
+use reg::Reg8;
+
 use crate::{
     bus::{Bus, Device},
     cart::CartridgeData,
@@ -28,6 +30,9 @@ fn does_bit3_borrow(a: u8, b: u8) -> bool {
 }
 
 pub struct Cpu<T: CartridgeData> {
+
+    regs: [u8; 8],
+
     a: u8,
     b: u8,
     c: u8,
@@ -56,56 +61,6 @@ const A_REG: u8 = 7;
 const HL_REG: u8 = 2;
 
 const HL_PTR: u8 = 6;
-
-#[derive(Debug)]
-pub enum Reg {
-    B,
-    C,
-    D,
-    E,
-    H,
-    L,
-    A,
-    BC,
-    DE,
-    HL,
-    SP,
-}
-
-/*
- * TODO: Replace decode with this to save space?
-#[derive(Debug)]
-pub enum Instruction2 {
-    Nop,                              // 0x00 - No operation
-    Load { src: Reg, dest: Reg },      // LD src, dest
-    LoadImm8 { reg: Reg, value: u8 },  // LD reg, #8-bit value
-    LoadImm16 { reg: Reg, value: u16 },// LD reg, #16-bit value
-    LoadMemToReg { reg: Reg, addr: u16 },  // LD (addr), reg
-    LoadRegToMem { reg: Reg, addr: u16 },  // LD reg, (addr)
-    Add { reg: Reg },                  // ADD reg
-    AddImm8 { value: u8 },             // ADD A, #8-bit value
-    Sub { reg: Reg },                  // SUB reg
-    And { reg: Reg },                  // AND reg
-    Or { reg: Reg },                   // OR reg
-    Xor { reg: Reg },                  // XOR reg
-    Compare { reg: Reg },              // CP reg
-    Inc { reg: Reg },                  // INC reg
-    Dec { reg: Reg },                  // DEC reg
-    Jump { addr: u16 },                // JP addr
-    JumpRelative { offset: i8 },       // JR offset
-    Call { addr: u16 },                // CALL addr
-    Return,                            // RET
-    Halt,                              // STOP
-    Di,                                // DI (Disable interrupts)
-    Ei,                                // EI (Enable interrupts)
-    Rst { vector: u16 },               // RST vector
-    Rotate { reg: Reg, direction: char }, // RLC, RL, etc.
-    BitTest { reg: Reg, bit: u8 },      // BIT bit, reg
-    Swap { reg: Reg },                 // SWAP reg
-    Shift { reg: Reg, direction: char }, // SLA, SRA, etc.
-    Undefined(u8),                     // For undefined opcodes
-}
-*/
 
 impl<T: CartridgeData> Cpu<T> {
     fn no_op(_cpu: &mut Self, _opcode: u8) -> u8 {
@@ -899,7 +854,20 @@ impl<T: CartridgeData> Cpu<T> {
     //TODO: Add an API to build the CPU in a state that
     //      does not skip the boot rom
     pub fn new(bus: Bus<T>) -> Self {
+
+
+        let mut regs = [0_u8; 8];
+        regs[Reg8::A.get().into()] = 0x01;
+        regs[Reg8::B.get().into()] = 0x00;
+        regs[Reg8::C.get().into()] = 0x13;
+        regs[Reg8::D.get().into()] = 0x00;
+        regs[Reg8::E.get().into()] = 0xD8;
+        regs[Reg8::H.get().into()] = 0x01;
+        regs[Reg8::L.get().into()] = 0x4D;
+        regs[Reg8::HL_REF.get().into()] = 0xFF;
+
         Cpu {
+            regs,
             a: 0x01,
             b: 0x00,
             c: 0x13,
@@ -931,82 +899,60 @@ impl<T: CartridgeData> Cpu<T> {
     }
 
     #[inline(always)]
-    fn rreg8(&mut self, dst: u8) -> u8 {
-        match dst {
-            0 => return self.b,
-            1 => return self.c,
-            2 => return self.d,
-            3 => return self.e,
-            4 => return self.h,
-            5 => return self.l,
+    fn rreg8(&mut self, dst: reg::Reg8) -> u8 {
+        match dst.get() {
+            0..=5 | 7 => return self.regs[usize::from(dst.get())],
             6 => {
                 // This is a special case, instead of setting a register,
                 // we use the memory location pointed to by the HL register
                 let hl = ((self.h as u16) << 8) | (self.l as u16);
                 return self.bus.read(hl);
             }
-            7 => return self.a,
-            _ => unreachable!("rreg8 with invalid bit index! {dst}"),
+            _ => unreachable!("rreg8 with invalid bit index! {:?}", dst),
         }
     }
 
     #[inline(always)]
-    fn wreg8(&mut self, dst: u8, val: u8) {
-        match dst {
-            0 => self.b = val,
-            1 => self.c = val,
-            2 => self.d = val,
-            3 => self.e = val,
-            4 => self.h = val,
-            5 => self.l = val,
+    fn wreg8(&mut self, dst: reg::Reg8, val: u8) {
+        match dst.get() {
+            0..=5 | 7 => self.regs[usize::from(dst.get())] = val,
             6 => {
                 // This is a special case, instead of setting a register,
                 // we use the memory location pointed to by the HL register
                 let hl = ((self.h as u16) << 8) | (self.l as u16);
                 self.bus.write(hl, val);
             }
-            7 => self.a = val,
-            _ => unreachable!("Set reg8 with invalid bit index! {dst}"),
+            _ => unreachable!("Set reg8 with invalid bit index! {:?}", dst),
         }
     }
 
     #[inline(always)]
-    fn wreg16(&mut self, dst: u8, val: u16) {
+    fn wreg16(&mut self, dst: reg::Reg16, val: u16) {
         let high: u8 = (val >> 8) as u8;
         let low: u8 = val as u8;
 
-        match dst {
-            0 => {
-                self.b = high;
-                self.c = low;
-            }
-            1 => {
-                self.d = high;
-                self.e = low;
-            }
-            2 => {
-                self.h = high;
-                self.l = low;
+        match dst.get() {
+            dst @ 0 ..= 2 => {
+                self.regs[usize::from(dst)] = high;
+                self.regs[usize::from(dst)+1] = low;
             }
             3 => {
                 self.sp = val;
             }
             _ => {
-                unreachable!("Set reg16 with invalid bit index! {dst}")
+                unreachable!("Set reg16 with invalid bit index! {:?}", dst)
             }
         }
     }
 
     #[inline(always)]
-    fn rreg16(&mut self, dst: u8) -> u16 {
-        let make_u16 = |h, l| -> u16 { (h as u16) << 8 | (l as u16) };
-
-        match dst {
-            0 => return make_u16(self.b, self.c),
-            1 => return make_u16(self.d, self.e),
-            2 => return make_u16(self.h, self.l),
+    fn rreg16(&mut self, dst: reg::Reg16) -> u16 {
+        match dst.get() {
+            dst @ 0..=2 => {
+                u16::from_be_bytes(self.regs[dst.into()..][..1].try_into().unwrap())
+            },
             3 => return self.sp,
-            _ => unreachable!("rreg16 with invalid bit index! {dst}"),
+            _ => unreachable!("rreg16 with invalid bit index! {:?}", dst),
         }
     }
 
@@ -1338,4 +1284,45 @@ impl<T: CartridgeData> Cpu<T> {
         self.bus.clear_interrupt(int_source);
         return 5;
     }
+}
+
+
+mod reg {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+    struct BoundByte<const MAX: u8>(u8);
+
+    impl<const MAX: u8> BoundByte<MAX> {
+
+        pub const fn new(val: u8) -> Option<Self> {
+            if val > MAX {
+                return None;
+            }
+
+            Some(Self(val))
+        }
+
+        pub const fn get(&self) -> u8 {
+            unsafe { 
+                core::hint::assert_unchecked(self.0 <= MAX);
+            }
+            self.0
+        }
+
+    }
+
+    pub type Reg8 = BoundByte<7>;
+
+    impl Reg8 {
+        pub const B: Reg8 = Reg8::new(0).unwrap();
+        pub const C: Reg8 = Reg8::new(1).unwrap();
+        pub const D: Reg8 = Reg8::new(2).unwrap();
+        pub const E: Reg8 = Reg8::new(3).unwrap();
+        pub const H: Reg8 = Reg8::new(4).unwrap();
+        pub const L: Reg8 = Reg8::new(5).unwrap();
+        pub const HL_REF: Reg8 = Reg8::new(6).unwrap();
+        pub const A: Reg8 = Reg8::new(7).unwrap();
+    }
+
+    pub type Reg16 = BoundByte<3>;
+    pub type Cond = BoundByte<3>;
 }
